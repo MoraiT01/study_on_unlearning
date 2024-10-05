@@ -3,3 +3,7 @@ numpy
 pandas
 matplotlib
 torch
+datasets
+sklearn
+torchvision
+tensorflow
