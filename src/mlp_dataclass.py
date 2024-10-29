@@ -5,29 +5,28 @@ import os
 
 from datasets import load_dataset
 from PIL import Image
+from torch.utils.data import Dataset
 import numpy as np
 
 
-class TwoLayerPerceptron(torch.nn.Module):
+class ThreeLayerPerceptron(torch.nn.Module):
     def __init__(self, input_dim, output_dim):
-        super(TwoLayerPerceptron, self).__init__()
+        super(ThreeLayerPerceptron, self).__init__()
         self.fc1 = torch.nn.Linear(input_dim, 800)
-        self.fc3 = torch.nn.Linear(800, output_dim)
+        self.fc2 = torch.nn.Linear(800, 600)
+        self.fc3 = torch.nn.Linear(600, output_dim)
 
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
+        x = self.fc2(x)
+        x = torch.relu(x)
         x = self.fc3(x)
         x = torch.log_softmax(x, dim=1)
         return x
-    
-class OptimzerMLP():
 
-    def __init__(self):
-        pass
-
-class MNIST_Loader():
-    """MNIST dataset."""
+class MNIST_CostumDataset(Dataset):
+    """MNIST dataset for my own experiments."""
 
     def __init__(
             self,

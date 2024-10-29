@@ -1,9 +1,24 @@
 """This file contains the trainings process"""
 
 import torch
+from mlp_dataclass import MNIST_CostumDataset
 
 LR = 0.005
 EPOCHS = 1000
+
+INCLUDE_TRAIN = True
+INCLUDE_TEST = True
+INCLUDE_ERASED = True
+
+loader = torch.utils.data.DataLoader(
+    dataset=MNIST_CostumDataset(
+        include_erased=INCLUDE_ERASED,
+        include_train=INCLUDE_TRAIN,
+        include_test=INCLUDE_TEST
+    ),
+    batch_size=32,
+    shuffle=True
+)
 
 def train(model, train_loader, optimizer):
     """Train the model"""
