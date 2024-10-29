@@ -7,3 +7,4 @@ datasets
 sklearn
 torchvision
 tensorflow
+seaborn
