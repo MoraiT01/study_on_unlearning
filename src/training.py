@@ -3,6 +3,8 @@
 from typing import List, Dict, Tuple
 from datetime import datetime
 
+import matplotlib.pyplot as plt
+import seaborn as sns
 import torch
 from mlp_dataclass import MNIST_CostumDataset, ThreeLayerPerceptron
 import torch.nn as nn
@@ -40,9 +42,9 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
     """
     correct = 0
     train_losses = []
-    x = 0
+
     # Training phase
-    for images, labels in tqdm(train_loader, desc=f"Epoch {epoch + 1}/{EPOCHS}", leave=False):
+    for images, labels in tqdm(train_loader, desc=f"Epoch {epoch}/{EPOCHS}", leave=False):
         # Move the images and labels to the device
         images, labels = images.to(DEVICE), labels.to(DEVICE)
 
@@ -64,12 +66,11 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
         _, preds = torch.max(outputs, 1)
         _, l = torch.max(labels, 1)
         correct += torch.sum(preds == l).item()
-        x+=1
     
     # Calculate training accuracy
     training_accuracy = correct / len(train_loader.dataset)
 
-    return train_losses, training_accuracy, range(1, x+1)
+    return train_losses, training_accuracy
 
 def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module) -> Tuple[float, float]:
     """
@@ -157,26 +158,26 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
     for epoch in range(1, EPOCHS+1):
         
         # Train the model
-        l, a, x_range = train(model, train_loader, optimizer, loss_function)
-        losses["Training"]["y"].extend(l)
-        losses["Training"]["x"].extend(x_range)
-        losses["Average Training"]["y"].append(sum(l) / len(train_loader.dataset))
-        losses["Average Training"]["x"].append(x_range)
-        accuracys["Training"]["y"].append(a)
+        l_t, a_t = train(model, train_loader, optimizer, loss_function, epoch)
+        losses["Training"]["y"].extend(l_t)
+        losses["Training"]["x"].extend([x + losses["Training"]["x"][-1] if len(losses["Training"]["x"]) > 0 else 0 for x in range(len(l_t))])
+        losses["Average Training"]["y"].append(sum(l_t) / len(train_loader.dataset))
+        losses["Average Training"]["x"].append(epoch)
+        accuracys["Training"]["y"].append(a_t)
         accuracys["Training"]["x"].append(epoch)
 
         # Evaluate the model
-        l, a = evaluate_model(model, val_loader, loss_function)
-        losses["Average Validation"]["y"].append(l)
-        losses["Average Validation"]["x"].append(x_range)
-        accuracys["Validation"]["y"].append(a)
+        l_v, a_v = evaluate_model(model, val_loader, loss_function)
+        losses["Average Validation"]["y"].append(l_v)
+        losses["Average Validation"]["x"].append(epoch)
+        accuracys["Validation"]["y"].append(a_v)
         accuracys["Validation"]["x"].append(epoch)
         
         # Loarning rate step
         scheduler.step()
 
         # Print epoch results
-        print(f"Epoch [{epoch + 1}/{EPOCHS}] - "
+        print(f"Epoch [{epoch}/{EPOCHS}] - "
               f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
               f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
               f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
@@ -187,13 +188,60 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
 
 def plot_losses(losses: Dict[str, Dict[str, List]]):
     """Plot the losses"""
-    # TODO
+
+    sns.set(style='whitegrid')
+
+    plt.figure(figsize=(10, 5))
+
+    # sns.lineplot(
+    #     x=losses["Training"]["x"], 
+    #     y=losses["Training"]["y"], 
+    #     label='Training Loss per Batch', 
+    #     color='yellow').lines[0].set_linestyle("--")
+
+    sns.lineplot(
+        x=losses["Average Training"]["x"], 
+        y=losses["Average Training"]["y"], 
+        label='Average Training Loss', 
+        color='red')
+
+    sns.lineplot(
+        x=losses["Average Validation"]["x"], 
+        y=losses["Average Validation"]["y"], 
+        label='Average Validation Loss', 
+        color='blue')
+
+    plt.title('Training and Validation Loss')
+    plt.xlabel('Epochs')
+    plt.ylabel('Loss')
+    plt.legend()
+    plt.show()
     pass
 
 def plot_accuracys(accuracys: Dict[str, Dict[str, List]]):
     """Plot the accuracys"""
-    # TODO
-    pass
+
+    sns.set(style='whitegrid')
+
+    plt.figure(figsize=(10, 5))
+
+    sns.lineplot(
+        x=accuracys['Training']['x'], 
+        y=accuracys['Training']['y'], 
+        label='Training Accuracy', 
+        color='red')
+
+    sns.lineplot(
+        x=accuracys['Validation']['x'], 
+        y=accuracys['Validation']['y'], 
+        label='Validation Accuracy', 
+        color='blue')
+    
+    plt.title('Training and Validation Accuracy')
+    plt.xlabel('Epochs')
+    plt.ylabel('Accuracy')
+    plt.legend()
+    plt.show()
 
 def save_model(model: Module, path: str):
     """Save the model"""
@@ -213,8 +261,8 @@ def main(model: Module = None):
     # Initialize the model if not provided
     if model is None:
         model = ThreeLayerPerceptron(
-            input_dim =DATASET.__getitem__(0)[0].shape[0],
-            output_dim=DATASET.__getitem__(0)[1].shape[0]
+            input_dim =DATASET(include_test=True).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(include_test=True).__getitem__(0)[1].shape[0]
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -230,14 +278,14 @@ def main(model: Module = None):
     # Prepare the training data loader
     train_loader = DataLoader(
         dataset=DATASET(include_erased=INCLUDE_ERASED, include_train=INCLUDE_TRAIN, include_test=False),
-        batch_size=16,
+        batch_size=8,
         shuffle=True
     )
 
     # Prepare the validation data loader
     val_loader = DataLoader(
         dataset=DATASET(include_erased=False, include_train=False, include_test=True),
-        batch_size=16,
+        batch_size=8,
         shuffle=False
     )
 
