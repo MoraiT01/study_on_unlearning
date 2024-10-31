@@ -6,7 +6,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-from mlp_dataclass import MNIST_CostumDataset, ThreeLayerPerceptron
+from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import Module
@@ -255,14 +255,14 @@ def main(model: Module = None):
     Train and evaluate the model
 
     Args:
-        model (Module, optional): The model to be trained and evaluated. Defaults to None.
+        model (Module, optional): The model to be trained and evaluated. Defaults to None.6
     """
 
     # Initialize the model if not provided
     if model is None:
-        model = ThreeLayerPerceptron(
-            input_dim =DATASET(include_test=True).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(include_test=True).__getitem__(0)[1].shape[0]
+        model = TwoLayerPerceptron(
+            input_dim =DATASET(model="all", train=True).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(model="all", train=True).__getitem__(0)[1].shape[0],
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -277,14 +277,20 @@ def main(model: Module = None):
 
     # Prepare the training data loader
     train_loader = DataLoader(
-        dataset=DATASET(include_erased=INCLUDE_ERASED, include_train=INCLUDE_TRAIN, include_test=False),
+        dataset=DATASET(
+            sample_mode="all",
+            train=True,
+        ),
         batch_size=8,
         shuffle=True
     )
 
     # Prepare the validation data loader
     val_loader = DataLoader(
-        dataset=DATASET(include_erased=False, include_train=False, include_test=True),
+        dataset=DATASET(
+            sample_mode="all",
+            test=True,
+        ),
         batch_size=8,
         shuffle=False
     )
