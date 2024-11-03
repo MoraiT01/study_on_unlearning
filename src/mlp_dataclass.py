@@ -3,6 +3,7 @@
 import torch
 import os
 from typing import Literal
+from random import choice
 
 from datasets import load_dataset
 from PIL import Image
@@ -28,6 +29,8 @@ class TwoLayerPerceptron(torch.nn.Module):
         x = self.fc3(x)
         x = torch.log_softmax(x, dim=1)
         return x
+    
+    __str__ = lambda self: "TwoLayerPerceptron"
 
 class MNIST_CostumDataset(Dataset):
     """MNIST dataset for my own experiments."""
@@ -38,6 +41,7 @@ class MNIST_CostumDataset(Dataset):
             sample_mode: Literal["all", "except_erased", "only_erased"] = "all",
             train: bool=False,
             test: bool=False,
+            balanced_sampling: bool=False,
             download: bool=False,
             ):
         """
@@ -57,14 +61,21 @@ class MNIST_CostumDataset(Dataset):
         self.train = train
         self.test = test
 
+        self.balanced_sampling = balanced_sampling
+        if self.balanced_sampling:
+            self.lenght = 1000
+            self.next_cls = 0
+
         if download:
             self.save_mnist_to_folders(root_dir)
         self.samples = self._initialize()
 
     def _initialize(self):
         """Loads the MNIST dataset"""
+
         s = {}
         index = 0
+        self.possible_cls = []
         # iterate over all folders in the root directory
         for folder in os.listdir(self.root_dir):
             if folder.endswith("e"):
@@ -77,6 +88,8 @@ class MNIST_CostumDataset(Dataset):
             for file in os.listdir(os.path.join(self.root_dir, folder)):
                 if self.to_be_included(file, folder):
                     s[index] = {"image": os.path.join(self.root_dir, folder, file), "label": int(current_label)}
+                    if current_label not in self.possible_cls:
+                        self.possible_cls.append(current_label)
                     index += 1
         return s
     
@@ -128,15 +141,45 @@ class MNIST_CostumDataset(Dataset):
 
     def __len__(self):
         """counts the number of samples in the dataset"""
+        if self.balanced_sampling:
+            return self.lenght
         return len(self.samples)
+
+    def update_counter(self):
+        """Updates the counter to go to the next class in line"""
+        if self.next_cls < 9:
+            # next
+            self.next_cls += 1
+        else:
+            # reset
+            self.next_cls = 0
+
 
     def __getitem__(self, idx):
         """Returns the sample at index idx"""
-
-        sample = Image.open(self.samples[idx]["image"]).convert("L")
+        
+        x = self.samples[idx]
+        # no matter how many unquie samples
+        # it'll up/downsample to 1000 -> self.lenght
+        if self.balanced_sampling:
+            # what if the next class is not in the list of possible classes
+            if str(self.next_cls) not in self.possible_cls:
+                self.update_counter()
+                return self.__getitem__(idx)
+            
+            # prepare
+            prep = {k: v for k, v in self.samples.items() if v["label"] == self.next_cls}
+            # pick from the cls which is now in line
+            random_value = choice(list(prep.values()))
+            x = random_value
+            
+            #update counter, to go to the next class in line
+            self.update_counter()
+            
+        sample = Image.open(x["image"]).convert("L")
         sample = torch.Tensor(np.array(sample)).reshape(784)
         target = torch.zeros(10)
-        target[self.samples[idx]["label"]] = 1
+        target[x["label"]] = 1
 
         return sample, target
 

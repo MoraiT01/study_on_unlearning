@@ -1,6 +1,7 @@
 """This file contains the trainings process"""
 
 from typing import List, Dict, Tuple
+import os
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -14,7 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
 LR = 0.001
-EPOCHS = 10
+EPOCHS = 2
 
 INCLUDE_TRAIN = True
 INCLUDE_ERASED = True
@@ -186,8 +187,12 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
     return model, losses, accuracys
 
 
-def plot_losses(losses: Dict[str, Dict[str, List]]):
+def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}losses") -> None:
     """Plot the losses"""
+
+    # create the folder if it does not exist
+    if not os.path.exists(path):
+        os.makedirs(path)
 
     sns.set(style='whitegrid')
 
@@ -215,11 +220,19 @@ def plot_losses(losses: Dict[str, Dict[str, List]]):
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
-    plt.show()
-    pass
 
-def plot_accuracys(accuracys: Dict[str, Dict[str, List]]):
+    n = f"losses_{name}.png"
+    n = os.path.join(path, n)
+    plt.savefig(n)
+    plt.show()
+
+
+def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}accuracys" ) -> None:
     """Plot the accuracys"""
+
+    # create the folder if it does not exist
+    if not os.path.exists(path):
+        os.makedirs(path)
 
     sns.set(style='whitegrid')
 
@@ -241,16 +254,28 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]]):
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
+
+    n = f"accuracys_{name}.png"
+    n = os.path.join(path, n)
+    plt.savefig(n)
     plt.show()
 
-def save_model(model: Module, path: str):
+def save_model(model: Module, name: str, path: str = f"data{os.sep}models") -> None:
     """Save the model"""
 
-    date = datetime.now().__str__().split(" ")[0].replace("-", "_")
-    
-    pass
+    # create the folder if it does not exist
+    if not os.path.exists(path):
+        os.makedirs(path)
 
-def main(model: Module = None):
+    cls  = str(model)
+    n = f"{cls}_{name}.pt"
+    torch.save(model.state_dict(), os.path.join(path, n))
+
+    # model = TheModelClass(*args, **kwargs)
+    # model.load_state_dict(torch.load(PATH, weights_only=True))
+    # model.eval()
+
+def main(model: Module = None, sampling_mode: str = "all"):
     """
     Train and evaluate the model
 
@@ -261,8 +286,8 @@ def main(model: Module = None):
     # Initialize the model if not provided
     if model is None:
         model = TwoLayerPerceptron(
-            input_dim =DATASET(model="all", train=True).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(model="all", train=True).__getitem__(0)[1].shape[0],
+            input_dim =DATASET(sample_mode="all", train=True).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(sample_mode="all", train=True).__getitem__(0)[1].shape[0],
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -278,7 +303,7 @@ def main(model: Module = None):
     # Prepare the training data loader
     train_loader = DataLoader(
         dataset=DATASET(
-            sample_mode="all",
+            sample_mode=sampling_mode,
             train=True,
         ),
         batch_size=8,
@@ -288,7 +313,7 @@ def main(model: Module = None):
     # Prepare the validation data loader
     val_loader = DataLoader(
         dataset=DATASET(
-            sample_mode="all",
+            sample_mode=sampling_mode,
             test=True,
         ),
         batch_size=8,
@@ -305,11 +330,16 @@ def main(model: Module = None):
         loss_function=loss_function,
     )
 
+    date = datetime.now().strftime("%Y_%m_%d_%H%M")
+
     # Plot the training and validation losses
-    plot_losses(losses)
+    plot_losses(losses, date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses")
 
     # Plot the training and validation accuracies
-    plot_accuracys(accuracys)
+    plot_accuracys(accuracys, date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys")
+
+    # Save the model
+    save_model(model=model, name=date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}")
 
 if __name__ == "__main__":
     main()
