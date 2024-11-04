@@ -2,7 +2,7 @@
 
 import torch
 import os
-from typing import Literal
+from typing import Literal, List
 from random import choice
 
 from datasets import load_dataset
@@ -39,6 +39,7 @@ class MNIST_CostumDataset(Dataset):
             self,
             root_dir=f"..{os.sep}data{os.sep}mnist_dataset",
             sample_mode: Literal["all", "except_erased", "only_erased"] = "all",
+            classes: List[str] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",],
             train: bool=False,
             test: bool=False,
             balanced_sampling: bool=False,
@@ -49,17 +50,17 @@ class MNIST_CostumDataset(Dataset):
 
         Parameters:
             root_dir (string):      Directory with all the images. Default is "..{os.sep}data{os.sep}mnist_dataset"
-            all_samples (bool):     Include all samples. Default is False
-            all_except_erased (bool): Include all samples except the ones in the erased list. Default is False
-            only_erased (bool):     Include only the samples in the erased list. Default is False
-            train (bool):           Include all training images. Default is False
-            test (bool):            Include all test images. Default is False
+            sample_mode (string):   Sampling mode. Can be one of "all", "except_erased", or "only_erased". Default is "all"
+            classes (list):         List of classes to include. Default is ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",]
+            train (bool):           Include training images. Default is False
+            test (bool):            Include test images. Default is False
             download (bool):        Download the dataset to root_dir. Overwrite if exists. Default is False
         """
         self.root_dir = root_dir
         self.mode = sample_mode
         self.train = train
         self.test = test
+        self.classes = classes       
 
         self.balanced_sampling = balanced_sampling
         if self.balanced_sampling:
@@ -86,7 +87,7 @@ class MNIST_CostumDataset(Dataset):
 
             # iterate over all files in the current folder
             for file in os.listdir(os.path.join(self.root_dir, folder)):
-                if self.to_be_included(file, folder):
+                if self.to_be_included(file, folder) and current_label in self.classes:
                     s[index] = {"image": os.path.join(self.root_dir, folder, file), "label": int(current_label)}
                     if current_label not in self.possible_cls:
                         self.possible_cls.append(current_label)

@@ -14,7 +14,7 @@ EXACT     = f"..{os.sep}data{os.sep}models{os.sep}except_erased{os.sep}TwoLayerP
 
 def get_model(Name: Literal["untrained", "trained", "exact"]) -> TwoLayerPerceptron:
     """Retruns the model with the given path."""
-    new = TwoLayerPerceptron(input_dim=784, output_dim=10)
+    net = TwoLayerPerceptron(input_dim=784, output_dim=10)
     path = ""
     if Name == "untrained":
         path = UNTRAINED
@@ -25,4 +25,5 @@ def get_model(Name: Literal["untrained", "trained", "exact"]) -> TwoLayerPercept
     else:
         print("Name must be 'untrained', 'trained', or 'exact'.")
 
-    return new.load_state_dict(torch.load(path, weights_only=True))
+    net.load_state_dict(torch.load(path, weights_only=True))
+    return net
