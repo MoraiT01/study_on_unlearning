@@ -1,6 +1,6 @@
 """This file contains the trainings process"""
 
-from typing import List, Dict, Tuple
+from typing import List, Dict, Tuple, Literal
 import os
 from datetime import datetime
 
@@ -15,7 +15,7 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
 LR = 0.001
-EPOCHS = 2
+EPOCHS = 10
 
 INCLUDE_TRAIN = True
 INCLUDE_ERASED = True
@@ -92,7 +92,7 @@ def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module)
 
     # Iterate over the validation dataset
     with torch.no_grad():  # No need to compute gradients during validation
-        for images, labels in val_loader:
+        for images, labels in tqdm(val_loader, desc=f"Evaluation...", leave=False):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
             # Forward pass
@@ -220,6 +220,7 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     plt.xlabel('Epochs')
     plt.ylabel('Loss')
     plt.legend()
+    plt.ylim(0, 4)
 
     n = f"losses_{name}.png"
     n = os.path.join(path, n)
@@ -254,6 +255,7 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str =
     plt.xlabel('Epochs')
     plt.ylabel('Accuracy')
     plt.legend()
+    plt.ylim(0.7, 1.0)
 
     n = f"accuracys_{name}.png"
     n = os.path.join(path, n)
@@ -268,19 +270,35 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models") -> N
         os.makedirs(path)
 
     cls  = str(model)
-    n = f"{cls}_{name}.pt"
+    n = f"{cls}_{name}"
     torch.save(model.state_dict(), os.path.join(path, n))
+
+    print("Model saved to: ", os.path.join(path, n))
 
     # model = TheModelClass(*args, **kwargs)
     # model.load_state_dict(torch.load(PATH, weights_only=True))
     # model.eval()
 
-def main(model: Module = None, sampling_mode: str = "all"):
+def main(
+        new_name: str = None,
+        model: Module = None,
+        sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
+        balanced_sampling: bool = False
+    ) -> None:
     """
-    Train and evaluate the model
+    This function is the main entry point for the training and evaluation of a model.
 
-    Args:
-        model (Module, optional): The model to be trained and evaluated. Defaults to None.6
+    It takes in the following arguments:
+
+    - `model`: The model to be trained and evaluated. If not provided, a new model will be created.
+
+    - `sampling_mode`: The sampling mode to use. Can be one of "all", "except_erased", or "only_erased".
+
+    - `balanced_sampling`: A boolean indicating whether to use balanced sampling or not.
+
+    The function trains the model using the training data loader, evaluates it using the validation data loader, and saves the model to a file.
+
+    The function also plots the training and validation losses and accuracies and saves the plots to a file.
     """
 
     # Initialize the model if not provided
@@ -305,6 +323,7 @@ def main(model: Module = None, sampling_mode: str = "all"):
         dataset=DATASET(
             sample_mode=sampling_mode,
             train=True,
+            balanced_sampling=balanced_sampling,
         ),
         batch_size=8,
         shuffle=True
@@ -315,6 +334,8 @@ def main(model: Module = None, sampling_mode: str = "all"):
         dataset=DATASET(
             sample_mode=sampling_mode,
             test=True,
+            # balanced sampling makes no sense here, since we evaluating on the whole test dataset
+            balanced_sampling=False,
         ),
         batch_size=8,
         shuffle=False
@@ -330,16 +351,21 @@ def main(model: Module = None, sampling_mode: str = "all"):
         loss_function=loss_function,
     )
 
-    date = datetime.now().strftime("%Y_%m_%d_%H%M")
+    if new_name is None:
+        name = datetime.now().strftime("%Y_%m_%d_%H%M")
+    else:
+        name = new_name
+    if balanced_sampling:
+        name = f"b_{name}"
 
     # Plot the training and validation losses
-    plot_losses(losses, date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses")
+    plot_losses(losses, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses")
 
     # Plot the training and validation accuracies
-    plot_accuracys(accuracys, date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys")
+    plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys")
 
     # Save the model
-    save_model(model=model, name=date, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}")
+    save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}")
 
 if __name__ == "__main__":
     main()
