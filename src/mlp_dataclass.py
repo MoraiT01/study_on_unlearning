@@ -11,7 +11,8 @@ from torch.utils.data import Dataset
 import numpy as np
 
 # the set containing the images which will be unlearned during the experiment
-from list_7e import ERASED
+from unlearned_samples import get_listings
+from loader import prepare_cmnist_data
 
 # Im Paper wurde nicht gesagt, welche Activation function verwendet wird
 # Ich verwende ReLu, da es für mich der go-to ist
@@ -37,12 +38,13 @@ class MNIST_CostumDataset(Dataset):
 
     def __init__(
             self,
-            root_dir=f"..{os.sep}data{os.sep}mnist_dataset",
+            root_dir=f"..{os.sep}data",
             sample_mode: Literal["all", "except_erased", "only_erased"] = "all",
             classes: List[str] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",],
             train: bool=False,
             test: bool=False,
             balanced_sampling: bool=False,
+            dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
             download: bool=False,
             ):
         """
@@ -60,16 +62,17 @@ class MNIST_CostumDataset(Dataset):
         self.mode = sample_mode
         self.train = train
         self.test = test
-        self.classes = classes       
+        self.classes = classes
+        self.dataset_name = dataset_name
 
         self.balanced_sampling = balanced_sampling
         if self.balanced_sampling:
-            self.lenght = 1000
             self.next_cls = 0
 
         if download:
             self.save_mnist_to_folders(root_dir)
         self.samples = self._initialize()
+        self.length = len(self.samples)
 
     def _initialize(self):
         """Loads the MNIST dataset"""
@@ -142,9 +145,7 @@ class MNIST_CostumDataset(Dataset):
 
     def __len__(self):
         """counts the number of samples in the dataset"""
-        if self.balanced_sampling:
-            return self.lenght
-        return len(self.samples)
+        return self.length
 
     def update_counter(self):
         """Updates the counter to go to the next class in line"""
@@ -154,7 +155,6 @@ class MNIST_CostumDataset(Dataset):
         else:
             # reset
             self.next_cls = 0
-
 
     def __getitem__(self, idx):
         """Returns the sample at index idx"""
@@ -184,28 +184,48 @@ class MNIST_CostumDataset(Dataset):
 
         return sample, target
 
-    def save_mnist_to_folders(self, output_dir='mnist_dataset'):
+    def save_mnist_to_folders(self, output_dir='data'):
+        
         # Load the MNIST dataset
-        mnist = load_dataset('mnist')
+        if self.dataset_name == ("mnist" or "fashion_mnist"):
+            dataset = load_dataset(self.dataset_name)
+        elif self.dataset_name == "cmnist":
+            dataset = prepare_cmnist_data()
+        else:
+            raise Exception(f"Dataset '{self.dataset_name}' not supported.")
 
+        output_dir = os.path.join(output_dir, self.dataset_name)
         # Ensure the output directory exists
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)
 
         # Iterate through the dataset (train and test set)
         for split in ['train', 'test']:
-            data_split = mnist[split]
+            data_split = dataset[split]
 
             # Loop over each sample in the dataset
             for idx, sample in enumerate(data_split):
                 image, label = sample['image'], sample['label']
                 name = f"{split}_{idx}"
 
+                # Test if the sample is a file path
+                if isinstance(image, str):
+                    if "blue" in image:
+                        name = name.replace("_", "_b_")
+                    elif "green" in image:
+                        name = name.replace("_", "_g_")
+                    elif "red" in image:
+                        name = name.replace("_", "_r_")
+                    image = Image.open(image)
+
                 # Create the directory for the class if it doesn't exist
-                if name in ERASED:
+                # if name in ERASED:
+                if False:
+                    # TODO for Fashion MNIST: it uses 5e
                     class_dir = os.path.join(output_dir, "7e")
                 else:
                     class_dir = os.path.join(output_dir, str(label))
+                    
                 if not os.path.exists(class_dir):
                     os.makedirs(class_dir)
 

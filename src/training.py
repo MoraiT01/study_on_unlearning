@@ -15,7 +15,8 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
 LR = 0.001
-EPOCHS = 10
+N_UPDATES = 100000
+EVAL_STEPS = 1000
 
 INCLUDE_TRAIN = True
 INCLUDE_ERASED = True
@@ -27,7 +28,7 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Define the dataset
 DATASET = MNIST_CostumDataset
 
-def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, epoch: int) -> Tuple[List, float, List]:
+def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, n_updates: int) -> Tuple[List, float, List]:
     """
     Train the model
 
@@ -41,11 +42,16 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
     Returns:
         Tuple[List, float, List]: A tuple containing the losses, accuracy and x values for plotting
     """
+    # for evaluation
     correct = 0
     train_losses = []
+    # for keeping track of the number of updates
+    counter = 0
+    n = EVAL_STEPS if n_updates % EVAL_STEPS == 0 else n_updates % EVAL_STEPS
+    train_loader.dataset.length = n
 
     # Training phase
-    for images, labels in tqdm(train_loader, desc=f"Epoch {epoch}/{EPOCHS}", leave=False):
+    for images, labels in tqdm(train_loader, desc=f"Number of Updates {n_updates}/{N_UPDATES}", leave=False):
         # Move the images and labels to the device
         images, labels = images.to(DEVICE), labels.to(DEVICE)
 
@@ -67,6 +73,11 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
         _, preds = torch.max(outputs, 1)
         _, l = torch.max(labels, 1)
         correct += torch.sum(preds == l).item()
+
+        # Update the counter
+        counter += 1
+        if counter == n:
+            break
     
     # Calculate training accuracy
     training_accuracy = correct / len(train_loader.dataset)
@@ -156,33 +167,49 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
         }
     }
 
-    for epoch in range(1, EPOCHS+1):
-        
+    # Instead of epochs it should be the number of Updates
+
+    # Every 1000 Updates, we'll do an evaluation
+    counter = N_UPDATES
+    last_update = False
+    while True:
+        # Update the counter
+        if counter > EVAL_STEPS:
+            next_number_of_updates = EVAL_STEPS
+        else:
+            next_number_of_updates = counter
+            last_update = True
+        counter -= next_number_of_updates
+
+        current_update_count = N_UPDATES - counter
         # Train the model
-        l_t, a_t = train(model, train_loader, optimizer, loss_function, epoch)
+        l_t, a_t = train(model, train_loader, optimizer, loss_function, n_updates=current_update_count)
         losses["Training"]["y"].extend(l_t)
         losses["Training"]["x"].extend([x + losses["Training"]["x"][-1] if len(losses["Training"]["x"]) > 0 else 0 for x in range(len(l_t))])
-        losses["Average Training"]["y"].append(sum(l_t) / len(train_loader.dataset))
-        losses["Average Training"]["x"].append(epoch)
+        losses["Average Training"]["y"].append(sum(l_t) / next_number_of_updates)
+        losses["Average Training"]["x"].append(current_update_count)
         accuracys["Training"]["y"].append(a_t)
-        accuracys["Training"]["x"].append(epoch)
+        accuracys["Training"]["x"].append(current_update_count)
 
         # Evaluate the model
         l_v, a_v = evaluate_model(model, val_loader, loss_function)
         losses["Average Validation"]["y"].append(l_v)
-        losses["Average Validation"]["x"].append(epoch)
+        losses["Average Validation"]["x"].append(current_update_count)
         accuracys["Validation"]["y"].append(a_v)
-        accuracys["Validation"]["x"].append(epoch)
+        accuracys["Validation"]["x"].append(current_update_count)
         
         # Loarning rate step
         scheduler.step()
 
         # Print epoch results
-        print(f"Epoch [{epoch}/{EPOCHS}] - "
+        print(f"Number of Updates [{current_update_count}/{N_UPDATES}] - "
               f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
               f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
               f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
               f"Val Accuracy: {accuracys['Validation']['y'][-1]:.4f}")
+        
+        if last_update:
+            break
 
     return model, losses, accuracys
 
