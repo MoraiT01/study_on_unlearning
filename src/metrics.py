@@ -5,6 +5,7 @@ from torch import nn
 from tqdm import tqdm
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
+from typing import Literal
 
 from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 # import torch.optim as optim
@@ -46,7 +47,7 @@ def calc_accuracy(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset
 
     return avg_accuracy
 
-def calc_accuracy(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, loss_function = nn.CrossEntropyLoss()) -> float:
+def calc_loss(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, loss_function = nn.CrossEntropyLoss()) -> float:
     """
     Calculates the accuracy of the model on parsed data
 
@@ -140,3 +141,16 @@ def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device
     
     # Return average KL divergence over all samples
     return kl_divergence_sum / num_samples
+
+def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "loss") -> float:
+    """Serves as a forker for calc_accuracy and calc_loss"""
+    if metric == "loss":
+        return calc_loss(model, testing_loader)
+    elif metric == "accuracy":
+        return calc_accuracy(model, testing_loader)
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+    
+def calc_multimodel_metric(model1: TwoLayerPerceptron, model2: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal[None] = "loss") -> float:
+    """Serves as a forker for TODO"""
+    raise NotImplementedError

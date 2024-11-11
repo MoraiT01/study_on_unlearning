@@ -22,10 +22,10 @@ def get_listings(dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mn
     """
 
     if dataset_name == "mnist":
-        return MNIST
+        return MNIST, "7e"
     elif dataset_name == "cmnist":
-        return C_MNIST
+        return C_MNIST, "7e"
     elif dataset_name == "fashion_mnist":
-        return FASHION_MNIST
+        return FASHION_MNIST, "5e"
     else:
         raise Exception(f"Dataset '{dataset_name}' not supported.")
