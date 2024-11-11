@@ -291,7 +291,7 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str =
     plt.savefig(n)
     plt.show()
 
-def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
+def save_model(model: TwoLayerPerceptron, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
     """Save the model"""
 
     # create the folder if it does not exist
@@ -300,6 +300,8 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs
 
     cls  = str(model)
     n = f"{cls}_{name}"
+    
+    model.set_path(os.path.join(path, n))
     torch.save(model.state_dict(), os.path.join(path, n))
     
     if logs:
@@ -311,7 +313,7 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs
 
 def main(
         new_name: str = None,
-        model: Module = None,
+        model: TwoLayerPerceptron = None,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
         balanced_sampling: bool = False,
         include_val: bool = True,
@@ -407,7 +409,8 @@ def main(
 
 def train_n_models(
         n: int = 30,
-        sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
+        sampling_mode: Literal["all", "except_erased", "only_erased"] = "all",
+        dataset_name: Literal["mnist", "cmnist", "mnist"] = "mnist",
         balanced_sampling: bool = True,
         include_val: bool = False,
         logs: bool = False,
@@ -429,12 +432,13 @@ def train_n_models(
 
     models_dict = {}
 
-    for i in range(n):
+    for i in tqdm(range(n), desc="Training models", unit="model", leave=True):
         model, name = main(
             new_name=None,
             model=None,
             sampling_mode=sampling_mode,
             balanced_sampling=balanced_sampling,
+            dataset_name=dataset_name,
             include_val=include_val,
             logs=logs,
         )

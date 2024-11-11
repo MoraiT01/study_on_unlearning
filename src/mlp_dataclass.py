@@ -24,12 +24,20 @@ class TwoLayerPerceptron(torch.nn.Module):
         self.fc1 = torch.nn.Linear(input_dim, 800)
         self.fc3 = torch.nn.Linear(800, output_dim)
 
+        self.path = None
+
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
         x = self.fc3(x)
         x = torch.log_softmax(x, dim=1)
         return x
+    
+    def set_path(self, new_path: str):
+        self.path = new_path
+
+    def get_path(self):
+        return self.path
     
     __str__ = lambda self: "TwoLayerPerceptron"
 
