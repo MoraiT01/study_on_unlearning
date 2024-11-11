@@ -7,7 +7,7 @@ from typing import Dict, List, Literal
 from matplotlib.colors import LinearSegmentedColormap
 from tqdm import tqdm
 
-from loader import get_dataset_subsetloaders
+from helper import get_dataset_subsetloaders
 from metrics import calc_singlemodel_metric, calc_multimodel_metric
 
 # TODO
