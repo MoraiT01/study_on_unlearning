@@ -3,10 +3,7 @@
 import os
 import PIL
 from PIL.Image import Image
-from typing import Dict, Union, Literal, Tuple
-from torch.utils.data import DataLoader
-
-from mlp_dataclass import MNIST_CostumDataset
+from typing import Dict
 
 PATH_TO_CMNIST_TEST  = f"..{os.sep}data{os.sep}c_mnist{os.sep}repo{os.sep}testing"
 PATH_TO_CMNIST_TRAIN = f"..{os.sep}data{os.sep}c_mnist{os.sep}repo{os.sep}training"
