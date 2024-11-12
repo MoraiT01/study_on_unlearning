@@ -15,11 +15,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
 LR = 0.001
-N_UPDATES = 100000
+N_UPDATES = 10000
 EVAL_STEPS = 1000
 
-INCLUDE_TRAIN = True
-INCLUDE_ERASED = True
+INCLUDE_TRAIN = True  # TODO is das noch aktuell?
+INCLUDE_ERASED = True #
 
 # Set device (use GPU if available)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,17 +30,7 @@ DATASET = MNIST_CostumDataset
 
 def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, n_updates: int) -> Tuple[List, float, List]:
     """
-    Train the model
 
-    Args:
-        model (Module): The model to be trained
-        train_loader (DataLoader): A DataLoader containing the training data
-        optimizer (Optimizer): The optimizer to be used for training
-        loss_function (Module): The loss function to be used for training
-        epoch (int): The current epoch
-
-    Returns:
-        Tuple[List, float, List]: A tuple containing the losses, accuracy and x values for plotting
     """
     # for evaluation
     correct = 0
@@ -86,15 +76,6 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
 
 def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module) -> Tuple[float, float]:
     """
-    Evaluate the model
-
-    Args:
-        model (Module): The model to be evaluated
-        val_loader (DataLoader): A DataLoader containing the validation data
-        loss_function (Module): The loss function to be used for evaluation
-
-    Returns:
-        Tuple[float, float]: A tuple containing the average validation loss and the validation accuracy
     """
     # Validation phase
     model.eval()  # Set model to evaluation mode
@@ -124,17 +105,18 @@ def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module)
 
     return avg_val_loss, val_accuracy
 
-def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: DataLoader, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler, loss_function: Module) -> Tuple[Module, Dict, Dict]:
+def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: DataLoader | None, optimizer: optim.Optimizer, scheduler: optim.lr_scheduler, loss_function: Module, logs: bool) -> Tuple[Module, Dict, Dict]:
     """
     Train and evaluate the model
 
     Args:
         model (Module): The model to be trained
         train_loader (DataLoader): A DataLoader containing the training data
-        val_loader (DataLoader): A DataLoader containing the validation data
+        val_loader (DataLoader): A DataLoader containing the validation data, not mandatory
         optimizer (Optimizer): The optimizer to be used for training
         scheduler (lr_scheduler): The learning rate scheduler to be used for training
         loss_function (Module): The loss function to be used for training
+        logs (bool): A boolean indicating whether to print logs or not
 
     Returns:
         Tuple[Module, Dict, Dict]: A tuple containing the trained model, losses and accuracys
@@ -191,28 +173,28 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
         accuracys["Training"]["y"].append(a_t)
         accuracys["Training"]["x"].append(current_update_count)
 
-        # Evaluate the model
-        l_v, a_v = evaluate_model(model, val_loader, loss_function)
-        losses["Average Validation"]["y"].append(l_v)
-        losses["Average Validation"]["x"].append(current_update_count)
-        accuracys["Validation"]["y"].append(a_v)
-        accuracys["Validation"]["x"].append(current_update_count)
+        if val_loader is not None:
+            # Evaluate the model
+            l_v, a_v = evaluate_model(model, val_loader, loss_function)
+            losses["Average Validation"]["y"].append(l_v)
+            losses["Average Validation"]["x"].append(current_update_count)
+            accuracys["Validation"]["y"].append(a_v)
+            accuracys["Validation"]["x"].append(current_update_count)
         
         # Loarning rate step
         scheduler.step()
 
-        # Print epoch results
-        print(f"Number of Updates [{current_update_count}/{N_UPDATES}] - "
-              f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
-              f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
-              f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
-              f"Val Accuracy: {accuracys['Validation']['y'][-1]:.4f}")
-        
+        if logs:
+            # Print epoch results
+            print(f"Number of Updates [{current_update_count}/{N_UPDATES}] - "
+                f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
+                f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
+                f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
+                f"Val Accuracy: {accuracys['Validation']['y'][-1]:.4f}")
         if last_update:
             break
 
     return model, losses, accuracys
-
 
 def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}losses") -> None:
     """Plot the losses"""
@@ -254,7 +236,6 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     plt.savefig(n)
     plt.show()
 
-
 def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}accuracys" ) -> None:
     """Plot the accuracys"""
 
@@ -289,7 +270,7 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str =
     plt.savefig(n)
     plt.show()
 
-def save_model(model: Module, name: str, path: str = f"data{os.sep}models") -> None:
+def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
     """Save the model"""
 
     # create the folder if it does not exist
@@ -299,40 +280,31 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models") -> N
     cls  = str(model)
     n = f"{cls}_{name}"
     torch.save(model.state_dict(), os.path.join(path, n))
-
-    print("Model saved to: ", os.path.join(path, n))
-
-    # model = TheModelClass(*args, **kwargs)
-    # model.load_state_dict(torch.load(PATH, weights_only=True))
-    # model.eval()
+    
+    if logs:
+        print("Model saved to: ", os.path.join(path, n))
 
 def main(
         new_name: str = None,
         model: Module = None,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
-        balanced_sampling: bool = False
+        balanced_sampling: bool = False,
+        dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
+        download: bool=False,
+        include_val: bool = True,
+        logs: bool = True,
     ) -> None:
     """
-    This function is the main entry point for the training and evaluation of a model.
-
-    It takes in the following arguments:
-
-    - `model`: The model to be trained and evaluated. If not provided, a new model will be created.
-
-    - `sampling_mode`: The sampling mode to use. Can be one of "all", "except_erased", or "only_erased".
-
-    - `balanced_sampling`: A boolean indicating whether to use balanced sampling or not.
-
-    The function trains the model using the training data loader, evaluates it using the validation data loader, and saves the model to a file.
-
-    The function also plots the training and validation losses and accuracies and saves the plots to a file.
     """
+    # Load the specified dataset
+    if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
+        raise Exception(f"Dataset '{dataset_name}' not supported.")
 
     # Initialize the model if not provided
     if model is None:
         model = TwoLayerPerceptron(
-            input_dim =DATASET(sample_mode="all", train=True).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(sample_mode="all", train=True).__getitem__(0)[1].shape[0],
+            input_dim =DATASET(sample_mode="all", train=True, download=True).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(sample_mode="all", train=True, download=True).__getitem__(0)[1].shape[0],
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -351,11 +323,12 @@ def main(
             sample_mode=sampling_mode,
             train=True,
             balanced_sampling=balanced_sampling,
+            dataset_name=dataset_name,
         ),
         batch_size=8,
         shuffle=True
     )
-
+    
     # Prepare the validation data loader
     val_loader = DataLoader(
         dataset=DATASET(
@@ -366,7 +339,7 @@ def main(
         ),
         batch_size=8,
         shuffle=False
-    )
+    ) if include_val else None
 
     # Train and evaluate the model
     model, losses, accuracys = train_and_evaluate(
@@ -376,6 +349,7 @@ def main(
         optimizer=optimizer,
         scheduler=scheduler,
         loss_function=loss_function,
+        logs=logs,
     )
 
     if new_name is None:
@@ -393,6 +367,8 @@ def main(
 
     # Save the model
     save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}")
+
+    return model, name
 
 if __name__ == "__main__":
     main()
