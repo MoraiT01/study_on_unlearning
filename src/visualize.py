@@ -10,9 +10,10 @@ from tqdm import tqdm
 from helper import get_dataset_subsetloaders
 from metrics import calc_singlemodel_metric, calc_multimodel_metric
 
-# TODO
-# Test if it works for your case
-# This function was writen by GPT, needs to be tested
+
+    # TODO
+    # Test if it works for your case
+    # This function was writen by GPT, needs to be tested
 def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     """
     Visualizes the change in weights via a heatmap.
@@ -25,6 +26,10 @@ def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     Returns:
     - A heatmap showing the change in the weights.
     """
+    # Example Usage:
+    # Assume `weights_before` and `weights_after` are tensors from a specific layer before and after training.
+    # visualize_weight_change(weights_before, weights_after, layer_name='Hidden Layer 1')
+
     # Ensure that the weights are PyTorch tensors
     if not isinstance(weights_before, torch.Tensor) or not isinstance(weights_after, torch.Tensor):
         raise ValueError("Both weights_before and weights_after should be torch.Tensor.")
@@ -47,10 +52,6 @@ def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     
     # Display the heatmap
     plt.show()
-
-# Example Usage
-# Assume `weights_before` and `weights_after` are tensors from a specific layer before and after training.
-# visualize_weight_change(weights_before, weights_after, layer_name='Hidden Layer 1')
 
 def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot of Accuracy Scores for Different Models') -> None:
     """Create a box plot of accuracy scores for each parsed list in the diconary."""
@@ -94,7 +95,7 @@ def boxplotting_multimodel_eval(
 
             if subset_name == "classes":
                 for class_name, class_subset in tqdm(subset.items(), "Calculating Class Accuracies", leave=False):
-                    class_metrics = calc_singlemodel_metric(model, class_subset)
+                    class_metrics = calc_singlemodel_metric(model, class_subset, metric=evaluation)
                     metrics[class_name].append(class_metrics)
             else:
                 subset_metrics = calc_singlemodel_metric(model, subset)

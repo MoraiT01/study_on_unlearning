@@ -8,9 +8,6 @@ from torch.utils.data import DataLoader
 from typing import Literal
 
 from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
-# import torch.optim as optim
-# from torch.nn import Module
-# from torch.utils.data import DataLoader
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -142,7 +139,7 @@ def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device
     # Return average KL divergence over all samples
     return kl_divergence_sum / num_samples
 
-def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "loss") -> float:
+def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "accuracy") -> float:
     """Serves as a forker for calc_accuracy and calc_loss"""
     if metric == "loss":
         return calc_loss(model, testing_loader)
@@ -151,6 +148,6 @@ def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_Cos
     else:
         raise ValueError(f"Unknown metric: {metric}")
     
-def calc_multimodel_metric(model1: TwoLayerPerceptron, model2: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal[None] = "loss") -> float:
+def calc_multimodel_metric(model1: TwoLayerPerceptron, model2: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal[None] = "") -> float:
     """Serves as a forker for TODO"""
     raise NotImplementedError

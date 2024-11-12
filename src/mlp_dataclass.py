@@ -56,18 +56,18 @@ class MNIST_CostumDataset(Dataset):
             download: bool=False,
             ):
         """
-        Constructor for the MNIST_CostumDataset class.
+            Constructor for the MNIST_CostumDataset class.
 
-        Parameters:
-            root_dir (str): The root directory of the dataset.
-            sample_mode (Literal["all", "except_erased", "only_erased"]): The mode for sampling the training data.
-            classes (List[str]): The list of classes to be used.
-            train (bool): Whether to load the training data.
-            test (bool): Whether to load the test data.
-            balanced (bool): Whether to balance data; Recommanded for training.
-            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to be used.
-            download (bool): Whether to download the dataset. Overwrites if it already exists
-        """
+            Parameters:
+                root_dir (str): The root directory of the dataset.
+                sample_mode (Literal["all", "except_erased", "only_erased"]): The mode for sampling the training data.
+                classes (List[str]): The list of classes to be used.
+                train (bool): Whether to load the training data.
+                test (bool): Whether to load the test data.
+                balanced (bool): Whether to balance data; Recommanded for training.
+                dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to be used.
+                download (bool): Whether to download the dataset. Overwrites if it already exists
+            """
         self.root_dir = os.path.join(root_dir, dataset_name)
         self.mode = sample_mode
         self.train = train
@@ -226,7 +226,9 @@ class MNIST_CostumDataset(Dataset):
         return sample, target
 
     def save_mnist_to_folders(self, output_dir='data'):
-        
+        """
+            TODO        
+        """
         # Load the MNIST dataset
         if self.dataset_name in ["mnist", "fashion_mnist"]:
             dataset = load_dataset(self.dataset_name)

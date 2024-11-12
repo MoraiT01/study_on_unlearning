@@ -18,9 +18,6 @@ LR = 0.001
 N_UPDATES = 10000
 EVAL_STEPS = 1000
 
-INCLUDE_TRAIN = True  # TODO is das noch aktuell?
-INCLUDE_ERASED = True #
-
 # Set device (use GPU if available)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -30,7 +27,7 @@ DATASET = MNIST_CostumDataset
 
 def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, n_updates: int) -> Tuple[List, float, List]:
     """
-
+        TODO
     """
     # for evaluation
     correct = 0
@@ -76,6 +73,7 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
 
 def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module) -> Tuple[float, float]:
     """
+        TODO
     """
     # Validation phase
     model.eval()  # Set model to evaluation mode
@@ -297,19 +295,20 @@ def main(
         logs: bool = True,
     ) -> None:
     """
+        TODO
     """
     # Load the specified dataset
     if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
         raise Exception(f"Dataset '{dataset_name}' not supported.")
 
     # Download the dataset
-    # DATASET(dataset_name=dataset_name, download=True) TODO
+    DATASET(dataset_name=dataset_name, download=True)
 
     # Initialize the model if not provided
     if model is None:
         model = TwoLayerPerceptron(
-            input_dim =DATASET(sample_mode="all", train=True,).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(sample_mode="all", train=True,).__getitem__(0)[1].shape[0],
+            input_dim =DATASET(sample_mode="all", train=True, dataset_name=dataset_name).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(sample_mode="all", train=True, dataset_name=dataset_name).__getitem__(0)[1].shape[0],
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -341,6 +340,7 @@ def main(
             test=True,
             # balanced sampling makes no sense here, since we evaluating on the whole test dataset
             balanced_sampling=False,
+            dataset_name=dataset_name
         ),
         batch_size=8,
         shuffle=False
@@ -400,7 +400,7 @@ def train_n_models(
 
     models_dict = {}
 
-    for i in tqdm(range(n), desc="Training models", unit="model", leave=True):
+    for i in tqdm(range(n), desc="Training models", unit="models", leave=True):
         model, name = main(
             new_name=None,
             model=None,
@@ -413,8 +413,6 @@ def train_n_models(
         models_dict[name] = model
 
     return models_dict
-
-    return model, name
 
 if __name__ == "__main__":
     main()

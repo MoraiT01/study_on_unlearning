@@ -1,7 +1,6 @@
 """Contains different loader classes and functions which help loading and preparing the data"""
 
 import os
-import PIL
 from PIL.Image import Image
 from typing import Dict
 
