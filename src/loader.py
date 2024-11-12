@@ -5,8 +5,8 @@ import PIL
 from PIL.Image import Image
 from typing import Dict
 
-PATH_TO_CMNIST_TEST  = f"..{os.sep}data{os.sep}c_mnist{os.sep}repo{os.sep}testing"
-PATH_TO_CMNIST_TRAIN = f"..{os.sep}data{os.sep}c_mnist{os.sep}repo{os.sep}training"
+PATH_TO_CMNIST_TEST  = f"..{os.sep}data{os.sep}cmnist_repo{os.sep}testing"
+PATH_TO_CMNIST_TRAIN = f"..{os.sep}data{os.sep}cmnist_repo{os.sep}training"
 
 import git
 

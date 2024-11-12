@@ -15,11 +15,11 @@ from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
 LR = 0.001
-N_UPDATES = 100000
+N_UPDATES = 10000
 EVAL_STEPS = 1000
 
-INCLUDE_TRAIN = True
-INCLUDE_ERASED = True
+INCLUDE_TRAIN = True  # TODO is das noch aktuell?
+INCLUDE_ERASED = True #
 
 # Set device (use GPU if available)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -30,17 +30,7 @@ DATASET = MNIST_CostumDataset
 
 def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, n_updates: int) -> Tuple[List, float, List]:
     """
-    Train the model
 
-    Args:
-        model (Module): The model to be trained
-        train_loader (DataLoader): A DataLoader containing the training data
-        optimizer (Optimizer): The optimizer to be used for training
-        loss_function (Module): The loss function to be used for training
-        epoch (int): The current epoch
-
-    Returns:
-        Tuple[List, float, List]: A tuple containing the losses, accuracy and x values for plotting
     """
     # for evaluation
     correct = 0
@@ -86,15 +76,6 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
 
 def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module) -> Tuple[float, float]:
     """
-    Evaluate the model
-
-    Args:
-        model (Module): The model to be evaluated
-        val_loader (DataLoader): A DataLoader containing the validation data
-        loss_function (Module): The loss function to be used for evaluation
-
-    Returns:
-        Tuple[float, float]: A tuple containing the average validation loss and the validation accuracy
     """
     # Validation phase
     model.eval()  # Set model to evaluation mode
@@ -215,7 +196,6 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
 
     return model, losses, accuracys
 
-
 def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}losses") -> None:
     """Plot the losses"""
 
@@ -255,7 +235,6 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     n = os.path.join(path, n)
     plt.savefig(n)
     plt.show()
-
 
 def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}accuracys" ) -> None:
     """Plot the accuracys"""
@@ -307,33 +286,21 @@ def save_model(model: TwoLayerPerceptron, name: str, path: str = f"data{os.sep}m
     if logs:
         print("Model saved to: ", os.path.join(path, n))
 
-    # model = TheModelClass(*args, **kwargs)
-    # model.load_state_dict(torch.load(PATH, weights_only=True))
-    # model.eval()
-
 def main(
         new_name: str = None,
         model: TwoLayerPerceptron = None,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
         balanced_sampling: bool = False,
+        dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
+        download: bool=False,
         include_val: bool = True,
         logs: bool = True,
-    ) -> Tuple[Module, str]:
+    ) -> None:
     """
-    This function is the main entry point for the training and evaluation of a model.
-
-    It takes in the following arguments:
-
-    - `model`: The model to be trained and evaluated. If not provided, a new model will be created.
-
-    - `sampling_mode`: The sampling mode to use. Can be one of "all", "except_erased", or "only_erased".
-
-    - `balanced_sampling`: A boolean indicating whether to use balanced sampling or not.
-
-    The function trains the model using the training data loader, evaluates it using the validation data loader, and saves the model to a file.
-
-    The function also plots the training and validation losses and accuracies and saves the plots to a file.
     """
+    # Load the specified dataset
+    if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
+        raise Exception(f"Dataset '{dataset_name}' not supported.")
 
     # Download the dataset
     # DATASET(dataset_name=dataset_name, download=True) TODO
@@ -361,6 +328,7 @@ def main(
             sample_mode=sampling_mode,
             train=True,
             balanced_sampling=balanced_sampling,
+            dataset_name=dataset_name,
         ),
         batch_size=8,
         shuffle=True
@@ -445,6 +413,8 @@ def train_n_models(
         models_dict[name] = model
 
     return models_dict
+
+    return model, name
 
 if __name__ == "__main__":
     main()

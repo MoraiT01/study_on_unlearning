@@ -42,7 +42,7 @@ class TwoLayerPerceptron(torch.nn.Module):
     __str__ = lambda self: "TwoLayerPerceptron"
 
 class MNIST_CostumDataset(Dataset):
-    """MNIST dataset for my own experiments."""
+    """Costum dataset class for my own experiments."""
 
     def __init__(
             self,
@@ -51,22 +51,24 @@ class MNIST_CostumDataset(Dataset):
             classes: List[str] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",],
             train: bool=False,
             test: bool=False,
-            # balanced_sampling: bool=False,
+            balanced: bool=False,
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
             download: bool=False,
             ):
         """
-        Initialize the dataset
+        Constructor for the MNIST_CostumDataset class.
 
         Parameters:
-            root_dir (string):      Directory with all the images. Default is "..{os.sep}data{os.sep}mnist_dataset"
-            sample_mode (string):   Sampling mode. Can be one of "all", "except_erased", or "only_erased". Default is "all"
-            classes (list):         List of classes to include. Default is ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",]
-            train (bool):           Include training images. Default is False
-            test (bool):            Include test images. Default is False
-            download (bool):        Download the dataset to root_dir. Overwrite if exists. Default is False
+            root_dir (str): The root directory of the dataset.
+            sample_mode (Literal["all", "except_erased", "only_erased"]): The mode for sampling the training data.
+            classes (List[str]): The list of classes to be used.
+            train (bool): Whether to load the training data.
+            test (bool): Whether to load the test data.
+            balanced (bool): Whether to balance data; Recommanded for training.
+            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to be used.
+            download (bool): Whether to download the dataset. Overwrites if it already exists
         """
-        self.root_dir = root_dir
+        self.root_dir = os.path.join(root_dir, dataset_name)
         self.mode = sample_mode
         self.train = train
         self.test = test
@@ -75,14 +77,14 @@ class MNIST_CostumDataset(Dataset):
         # In order to sample in the same way every time
         # and for balancing purposes
         self.cls_counter = {k: 0 for k in self.classes}
-        # self.balanced_sampling = balanced_sampling # is not relevant, since we sample in the same way every time
+        self.balanced = balanced
         self.next_cls = 0
 
         if download:
             self.save_mnist_to_folders(root_dir)
 
         self.samples = self._initialize()
-        self.length = self.max_samples_length * len(self.classes)
+        self.length = self.max_samples_length * len(self.classes) if self.balanced else sum([len(v) for v in self.samples.values()])
 
     def _initialize(self):
         """Loads the respective dataset"""
@@ -109,9 +111,7 @@ class MNIST_CostumDataset(Dataset):
         return s
     
     def to_be_included(self, file: str, folder: str) -> bool:
-        """
-        
-        """
+        """Checks if the file should be included in the dataset"""
 
         # Literal["all", "except_erased", "only_erased"]
         # Alle Daten
@@ -175,7 +175,20 @@ class MNIST_CostumDataset(Dataset):
         return index
 
     def __getitem__(self, idx):
-        """Returns the sample at index idx"""
+        """
+            Returns the sample and target for a given index.
+
+            The function retrieves a sample from the dataset based on the class 
+            counters and the current class index. If the dataset is not 'balanced', 
+            it uses the provided index to fetch the sample.
+
+            Parameters:
+                idx (int): Index of the sample to retrieve.
+
+            Returns:
+                tuple: A tuple containing the sample as a 784-dimensional tensor 
+                    and the target as a one-hot encoded tensor with 10 dimensions.
+        """
         # The idx does not influence the sample, which is returned
         # What is relevant for the sampling is
         # - self.cls_counter
@@ -183,22 +196,39 @@ class MNIST_CostumDataset(Dataset):
             
         # first let's get the next class
         cls = self.next_cls
-        index = self.update_counters(cls)
+        index = self.update_counters(str(cls))
+
+        # if all samples should be used, we need a different method
+        if not self.balanced:
+            index = idx
+            for key in self.samples:
+                current_dict = self.samples[key]
+                dict_len = len(current_dict)
+                cls = int(key)
+                # Check if the index falls within the current dictionary
+                if index < dict_len:
+                    # Return the idx if within range
+                    index = index
+                    break
+                # Adjust index for the next dictionary
+                index -= dict_len
 
         # now let's get the sample
         x = self.samples[str(cls)][index]
 
-        sample = Image.open(x["image"]).convert("L")
-        sample = torch.Tensor(np.array(sample)).reshape(784)
+        sample = Image.open(x).convert("L")
+        sample = np.array([sample])
+        sample = torch.Tensor(sample)
+        sample = sample.view(sample.size(0), -1).squeeze()
         target = torch.zeros(10)
-        target[x["label"]] = 1
+        target[cls] = 1
 
         return sample, target
 
     def save_mnist_to_folders(self, output_dir='data'):
         
         # Load the MNIST dataset
-        if self.dataset_name == ("mnist" or "fashion_mnist"):
+        if self.dataset_name in ["mnist", "fashion_mnist"]:
             dataset = load_dataset(self.dataset_name)
         elif self.dataset_name == "cmnist":
             dataset = prepare_cmnist_data()
