@@ -24,12 +24,20 @@ class TwoLayerPerceptron(torch.nn.Module):
         self.fc1 = torch.nn.Linear(input_dim, 800)
         self.fc3 = torch.nn.Linear(800, output_dim)
 
+        self.path = None
+
     def forward(self, x):
         x = self.fc1(x)
         x = torch.relu(x)
         x = self.fc3(x)
         x = torch.log_softmax(x, dim=1)
         return x
+    
+    def set_path(self, new_path: str):
+        self.path = new_path
+
+    def get_path(self):
+        return self.path
     
     __str__ = lambda self: "TwoLayerPerceptron"
 
@@ -69,14 +77,13 @@ class MNIST_CostumDataset(Dataset):
         # In order to sample in the same way every time
         # and for balancing purposes
         self.cls_counter = {k: 0 for k in self.classes}
-        self.balanced = balanced # tu differentiate between training and test
+        self.balanced = balanced
         self.next_cls = 0
 
         if download:
             self.save_mnist_to_folders(root_dir)
 
         self.samples = self._initialize()
-
         self.length = self.max_samples_length * len(self.classes) if self.balanced else sum([len(v) for v in self.samples.values()])
 
     def _initialize(self):
@@ -105,6 +112,7 @@ class MNIST_CostumDataset(Dataset):
     
     def to_be_included(self, file: str, folder: str) -> bool:
         """Checks if the file should be included in the dataset"""
+
         # Literal["all", "except_erased", "only_erased"]
         # Alle Daten
         if self.mode == "all":
@@ -180,7 +188,7 @@ class MNIST_CostumDataset(Dataset):
             Returns:
                 tuple: A tuple containing the sample as a 784-dimensional tensor 
                     and the target as a one-hot encoded tensor with 10 dimensions.
-            """
+        """
         # The idx does not influence the sample, which is returned
         # What is relevant for the sampling is
         # - self.cls_counter

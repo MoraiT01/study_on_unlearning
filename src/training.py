@@ -270,7 +270,7 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str =
     plt.savefig(n)
     plt.show()
 
-def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
+def save_model(model: TwoLayerPerceptron, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
     """Save the model"""
 
     # create the folder if it does not exist
@@ -279,6 +279,8 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs
 
     cls  = str(model)
     n = f"{cls}_{name}"
+    
+    model.set_path(os.path.join(path, n))
     torch.save(model.state_dict(), os.path.join(path, n))
     
     if logs:
@@ -286,7 +288,7 @@ def save_model(model: Module, name: str, path: str = f"data{os.sep}models", logs
 
 def main(
         new_name: str = None,
-        model: Module = None,
+        model: TwoLayerPerceptron = None,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
         balanced_sampling: bool = False,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
@@ -300,11 +302,14 @@ def main(
     if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
         raise Exception(f"Dataset '{dataset_name}' not supported.")
 
+    # Download the dataset
+    # DATASET(dataset_name=dataset_name, download=True) TODO
+
     # Initialize the model if not provided
     if model is None:
         model = TwoLayerPerceptron(
-            input_dim =DATASET(sample_mode="all", train=True, download=True).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(sample_mode="all", train=True, download=True).__getitem__(0)[1].shape[0],
+            input_dim =DATASET(sample_mode="all", train=True,).__getitem__(0)[0].shape[0],
+            output_dim=DATASET(sample_mode="all", train=True,).__getitem__(0)[1].shape[0],
         )
     
     # Move the model to the appropriate device (GPU or CPU)
@@ -366,7 +371,48 @@ def main(
     plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys")
 
     # Save the model
-    save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}")
+    save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}", logs=logs)
+
+    return model, name
+
+def train_n_models(
+        n: int = 30,
+        sampling_mode: Literal["all", "except_erased", "only_erased"] = "all",
+        dataset_name: Literal["mnist", "cmnist", "mnist"] = "mnist",
+        balanced_sampling: bool = True,
+        include_val: bool = False,
+        logs: bool = False,
+    ) -> Dict[str, Module]:
+    """
+    Trains n models with the same parameters and returns a dictionary of the trained models.
+
+    Parameters:
+        n (int): The number of models to train.
+        sampling_mode (Literal["all", "except_erased", "only_erased"]): The sampling mode to use. Can be one of "all", "except_erased", or "only_erased".
+        balanced_sampling (bool): A boolean indicating whether to use balanced sampling or not.
+        include_val (bool): A boolean indicating whether to include validation data or not.
+        logs (bool): A boolean indicating whether to print logs or not.
+
+    Returns:
+        Dict[str, Module]: A dictionary where the keys are the names of the models and the values are the trained models.
+
+    """
+
+    models_dict = {}
+
+    for i in tqdm(range(n), desc="Training models", unit="model", leave=True):
+        model, name = main(
+            new_name=None,
+            model=None,
+            sampling_mode=sampling_mode,
+            balanced_sampling=balanced_sampling,
+            dataset_name=dataset_name,
+            include_val=include_val,
+            logs=logs,
+        )
+        models_dict[name] = model
+
+    return models_dict
 
     return model, name
 
