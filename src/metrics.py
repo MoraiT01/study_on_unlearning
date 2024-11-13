@@ -11,7 +11,7 @@ from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def calc_accuracy(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset) -> float:
+def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset) -> float:
     """
     Calculates the accuracy of the model on parsed data
 
@@ -28,7 +28,7 @@ def calc_accuracy(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset
 
     # Iterate over the evaluation dataset
     with torch.no_grad():  # No need to compute gradients during evaluation
-        for images, labels in tqdm(testing_loader, desc=f"Evaluation...", leave=False):
+        for images, labels in tqdm(testing_loader, total=len(testing_loader.dataset), desc=f"Evaluation...",leave=False):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
             # Forward pass
@@ -44,7 +44,7 @@ def calc_accuracy(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset
 
     return avg_accuracy
 
-def calc_loss(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, loss_function = nn.CrossEntropyLoss()) -> float:
+def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, loss_function = nn.CrossEntropyLoss()) -> float:
     """
     Calculates the accuracy of the model on parsed data
 

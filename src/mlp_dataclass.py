@@ -19,10 +19,10 @@ from loader import prepare_cmnist_data
 # Außerdem weicht das genau Training auch ab von dem was im Paper vorgeht, aber das soll nicht von wichtigkeit sein, da das MU im Vordergrund steht
 
 class TwoLayerPerceptron(torch.nn.Module):
-    def __init__(self, input_dim, output_dim):
+    def __init__(self):
         super(TwoLayerPerceptron, self).__init__()
-        self.fc1 = torch.nn.Linear(input_dim, 800)
-        self.fc3 = torch.nn.Linear(800, output_dim)
+        self.fc1 = torch.nn.Linear(784, 800)
+        self.fc3 = torch.nn.Linear(800, 10)
 
         self.path = None
 
@@ -40,6 +40,78 @@ class TwoLayerPerceptron(torch.nn.Module):
         return self.path
     
     __str__ = lambda self: "TwoLayerPerceptron"
+
+class ConvNet(torch.nn.Module):
+    def __init__(self,):
+        super(ConvNet, self).__init__()
+        
+        # Convolutional layers
+        self.conv1 = torch.nn.Conv2d(3, 32, kernel_size=3, padding=1)  # Input channels=3 for RGB
+        self.conv2 = torch.nn.Conv2d(32, 64, kernel_size=3, padding=1)
+        self.conv3 = torch.nn.Conv2d(64, 128, kernel_size=3, padding=1)
+        
+        # Pooling layer
+        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        
+        # Fully connected layers
+        self.fc1 = torch.nn.Linear(128 * 3 * 3, 128)  # Adjust input dim for 28x28 image after 3 layers of pooling
+        self.fc2 = torch.nn.Linear(128, 10)
+
+        self.path = None
+    
+    def forward(self, x):
+        # Convolutional layers with ReLU and pooling
+        x = self.pool(torch.relu(self.conv1(x)))
+        x = self.pool(torch.relu(self.conv2(x)))
+        x = self.pool(torch.relu(self.conv3(x)))
+        
+        # Flatten for fully connected layers
+        x = x.view(x.size(0), -1)
+        
+        # Fully connected layers with ReLU and softmax
+        x = torch.relu(self.fc1(x))
+        x = torch.log_softmax(self.fc2(x), dim=1)
+        
+        return x
+    
+    def set_path(self, new_path: str):
+        self.path = new_path
+
+    def get_path(self):
+        return self.path
+    
+    __str__ = lambda self: "ConNet"
+
+class ConvNet4Fashion(torch.nn.Module):
+    def __init__(self):
+        super(ConvNet4Fashion, self).__init__()
+        # First convolutional layer with kernel size 3x3 and 32 filters
+        self.conv1 = torch.nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
+        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        # Second convolutional layer with kernel size 3x3 and 64 filters
+        self.conv2 = torch.nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
+        # Fully connected layer
+        self.fc1 = torch.nn.Linear(64 * 7 * 7, 128)  # 7*7 is the size after 2 pooling layers on 28x28 input
+        # Output layer
+        self.fc2 = torch.nn.Linear(128, 10)
+
+        self.path = None
+
+    def forward(self, x):
+        x = self.pool(torch.relu(self.conv1(x)))    # First conv + ReLU + pooling
+        x = self.pool(torch.relu(self.conv2(x)))    # Second conv + ReLU + pooling
+        x = x.view(-1, 64 * 7 * 7)                  # Flatten
+        x = torch.relu(self.fc1(x))                 # Fully connected layer with ReLU
+        x = torch.softmax(self.fc2(x), dim=1)       # Output layer with softmax
+        return x
+
+    def set_path(self, new_path: str):
+        self.path = new_path
+
+    def get_path(self):
+        return self.path
+    
+    __str__ = lambda self: "ConNet4Fashion"
 
 class MNIST_CostumDataset(Dataset):
     """Costum dataset class for my own experiments."""
@@ -99,7 +171,9 @@ class MNIST_CostumDataset(Dataset):
             else:
                 current_label = folder
 
-            s[current_label] = {}
+            # create a dictionary for each class
+            if current_label not in s:
+                s[current_label] = {}
 
             # iterate over all files in the current folder
             for file in os.listdir(os.path.join(self.root_dir, folder)):
@@ -216,10 +290,18 @@ class MNIST_CostumDataset(Dataset):
         # now let's get the sample
         x = self.samples[str(cls)][index]
 
-        sample = Image.open(x).convert("L")
-        sample = np.array([sample])
-        sample = torch.Tensor(sample)
-        sample = sample.view(sample.size(0), -1).squeeze()
+        if self.dataset_name == "cmnist":
+            sample = Image.open(x).convert("RGB")
+            sample = np.array(sample)
+            sample = torch.Tensor(sample).permute(2, 0, 1).squeeze() * 1/255
+        else:
+            sample = Image.open(x).convert("L")
+            sample = np.array([sample])
+            sample = torch.Tensor(sample)
+            # if self.dataset_name == "fashion_mnist":
+            #     sample = sample * 1/255
+            # else:
+            sample = sample.view(sample.size(0), -1).squeeze() * 1/255
         target = torch.zeros(10)
         target[cls] = 1
 
@@ -227,7 +309,20 @@ class MNIST_CostumDataset(Dataset):
 
     def save_mnist_to_folders(self, output_dir='data'):
         """
-            TODO        
+            Saves the dataset to folders on the disk.
+            The dataset is saved in a folder structure like this:
+
+            data/dataset_name/
+                    train/
+                        0/  file1.png
+                            file2.png
+                            ...
+                        1/  ...
+                        ...
+                    test/
+                        0/  ...
+                        1/  ...
+                        ...
         """
         # Load the MNIST dataset
         if self.dataset_name in ["mnist", "fashion_mnist"]:
@@ -241,7 +336,7 @@ class MNIST_CostumDataset(Dataset):
         # Check if it allready exists
         # If so, we assume that the data is already saved
         if os.path.exists(output_dir):
-            print("Data already saved to: ", output_dir)
+            # print("Data already saved to: ", output_dir)
             return
         os.makedirs(output_dir)
 

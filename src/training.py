@@ -7,16 +7,23 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
+from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet, ConvNet4Fashion
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import Module
 from torch.utils.data import DataLoader
 from tqdm import tqdm  # For a progress bar
 
-LR = 0.001
-N_UPDATES = 10000
-EVAL_STEPS = 1000
+lr = 0.001
+n_updates = 10000
+eval_steps = 1000
+
+# Set the parameters for the different datasets
+model_params = {
+    "mnist":            {"lr": 0.001, "n_updates":  2000, "eval_steps":  200, "model": TwoLayerPerceptron},
+    "cmnist":           {"lr": 0.0005, "n_updates":  5000, "eval_steps":  500, "model": ConvNet},
+    "fashion_mnist":    {"lr": 0.0005, "n_updates": 4000, "eval_steps": 400 , "model": TwoLayerPerceptron},
+}
 
 # Set device (use GPU if available)
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -25,20 +32,30 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 # Define the dataset
 DATASET = MNIST_CostumDataset
 
-def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, n_updates: int) -> Tuple[List, float, List]:
+def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, loss_function: Module, updates: int) -> Tuple[List, float, List]:
     """
-        TODO
+        Train the model.
+
+        Parameters:
+            model (Module): The model to be trained.
+            train_loader (DataLoader): A DataLoader containing the training data.
+            optimizer (Optimizer): The optimizer to be used for training.
+            loss_function (Module): The loss function to be used for training.
+            updates (int): The number of updates to be performed.
+
+        Returns:
+            Tuple[List, float, List]: A tuple containing the losses, accuracy, and the model.
     """
     # for evaluation
     correct = 0
     train_losses = []
     # for keeping track of the number of updates
     counter = 0
-    n = EVAL_STEPS if n_updates % EVAL_STEPS == 0 else n_updates % EVAL_STEPS
+    n = eval_steps if updates % eval_steps == 0 else updates % eval_steps
     train_loader.dataset.length = n
 
     # Training phase
-    for images, labels in tqdm(train_loader, desc=f"Number of Updates {n_updates}/{N_UPDATES}", leave=False):
+    for images, labels in tqdm(train_loader, desc=f"Number of Updates {updates}/{n_updates}", leave=False):
         # Move the images and labels to the device
         images, labels = images.to(DEVICE), labels.to(DEVICE)
 
@@ -73,7 +90,15 @@ def train(model: Module, train_loader: DataLoader, optimizer: optim.Optimizer, l
 
 def evaluate_model(model: Module, val_loader: DataLoader, loss_function: Module) -> Tuple[float, float]:
     """
-        TODO
+        Evaluates the model.
+
+        Parameters:
+            model (Module): The model to be evaluated.
+            val_loader (DataLoader): A DataLoader containing the validation data.
+            loss_function (Module): The loss function to be used for evaluation.
+
+        Returns:
+            Tuple[float, float]: A tuple containing the average validation loss and validation accuracy.
     """
     # Validation phase
     model.eval()  # Set model to evaluation mode
@@ -150,20 +175,20 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
     # Instead of epochs it should be the number of Updates
 
     # Every 1000 Updates, we'll do an evaluation
-    counter = N_UPDATES
+    counter = n_updates
     last_update = False
     while True:
         # Update the counter
-        if counter > EVAL_STEPS:
-            next_number_of_updates = EVAL_STEPS
+        if counter > eval_steps:
+            next_number_of_updates = eval_steps
         else:
             next_number_of_updates = counter
             last_update = True
         counter -= next_number_of_updates
 
-        current_update_count = N_UPDATES - counter
+        current_update_count = n_updates - counter
         # Train the model
-        l_t, a_t = train(model, train_loader, optimizer, loss_function, n_updates=current_update_count)
+        l_t, a_t = train(model, train_loader, optimizer, loss_function, updates=current_update_count)
         losses["Training"]["y"].extend(l_t)
         losses["Training"]["x"].extend([x + losses["Training"]["x"][-1] if len(losses["Training"]["x"]) > 0 else 0 for x in range(len(l_t))])
         losses["Average Training"]["y"].append(sum(l_t) / next_number_of_updates)
@@ -184,7 +209,7 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
 
         if logs:
             # Print epoch results
-            print(f"Number of Updates [{current_update_count}/{N_UPDATES}] - "
+            print(f"Number of Updates [{current_update_count}/{n_updates}] - "
                 f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
                 f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
                 f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
@@ -194,7 +219,7 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
 
     return model, losses, accuracys
 
-def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}losses") -> None:
+def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}losses", logs: bool = True) -> None:
     """Plot the losses"""
 
     # create the folder if it does not exist
@@ -224,7 +249,7 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
         color='blue')
 
     plt.title('Training and Validation Loss')
-    plt.xlabel('Epochs')
+    plt.xlabel('Updates')
     plt.ylabel('Loss')
     plt.legend()
     plt.ylim(0, 4)
@@ -232,9 +257,11 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     n = f"losses_{name}.png"
     n = os.path.join(path, n)
     plt.savefig(n)
-    plt.show()
+    if logs:
+        plt.show()
+    plt.close()
 
-def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}accuracys" ) -> None:
+def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str = f"data{os.sep}graphs{os.sep}accuracys", logs: bool = True) -> None:
     """Plot the accuracys"""
 
     # create the folder if it does not exist
@@ -258,15 +285,17 @@ def plot_accuracys(accuracys: Dict[str, Dict[str, List]], name: str, path: str =
         color='blue')
     
     plt.title('Training and Validation Accuracy')
-    plt.xlabel('Epochs')
+    plt.xlabel('Updates')
     plt.ylabel('Accuracy')
     plt.legend()
-    plt.ylim(0.7, 1.0)
+    plt.ylim(0, 1.0)
 
     n = f"accuracys_{name}.png"
     n = os.path.join(path, n)
     plt.savefig(n)
-    plt.show()
+    if logs:
+        plt.show()
+    plt.close()
 
 def save_model(model: TwoLayerPerceptron, name: str, path: str = f"data{os.sep}models", logs: bool = True) -> None:
     """Save the model"""
@@ -288,14 +317,22 @@ def main(
         new_name: str = None,
         model: TwoLayerPerceptron = None,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all", 
-        balanced_sampling: bool = False,
+        balanced: bool = False,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
-        download: bool=False,
         include_val: bool = True,
         logs: bool = True,
-    ) -> None:
+    ) -> Tuple[Module, str]:
     """
-        TODO
+        Trains a model using the specified dataset and sampling mode.
+
+        Parameters:
+            new_name (str): The name for the new model. If None, a name will be generated.
+            model (TwoLayerPerceptron): The model to be trained. If None, a new model will be created.
+            sampling_mode (Literal["all", "except_erased", "only_erased"]): The sampling mode for the training data.
+            balanced (bool): Whether to balance the training data.
+            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to be used.
+            include_val (bool): Whether to include validation data in the training process.
+            logs (bool): Whether to print logs.
     """
     # Load the specified dataset
     if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
@@ -306,17 +343,23 @@ def main(
 
     # Initialize the model if not provided
     if model is None:
-        model = TwoLayerPerceptron(
-            input_dim =DATASET(sample_mode="all", train=True, dataset_name=dataset_name).__getitem__(0)[0].shape[0],
-            output_dim=DATASET(sample_mode="all", train=True, dataset_name=dataset_name).__getitem__(0)[1].shape[0],
-        )
-    
+        model = model_params[dataset_name]["model"]()
+
+    # Set the params
+    global lr
+    global n_updates
+    global eval_steps
+
+    lr =            model_params[dataset_name]["lr"]
+    n_updates =     model_params[dataset_name]["n_updates"]
+    eval_steps =    model_params[dataset_name]["eval_steps"]
+
     # Move the model to the appropriate device (GPU or CPU)
     model.to(DEVICE)
 
     # Define the loss function and optimizer
     loss_function = nn.CrossEntropyLoss()
-    optimizer = optim.Adam(model.parameters(), lr=LR)
+    optimizer = optim.Adam(model.parameters(), lr=lr)
 
     # Optional learning rate scheduler
     scheduler = optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
@@ -326,7 +369,7 @@ def main(
         dataset=DATASET(
             sample_mode=sampling_mode,
             train=True,
-            balanced_sampling=balanced_sampling,
+            balanced=balanced,
             dataset_name=dataset_name,
         ),
         batch_size=8,
@@ -339,7 +382,7 @@ def main(
             sample_mode=sampling_mode,
             test=True,
             # balanced sampling makes no sense here, since we evaluating on the whole test dataset
-            balanced_sampling=False,
+            balanced=False,
             dataset_name=dataset_name
         ),
         batch_size=8,
@@ -358,17 +401,17 @@ def main(
     )
 
     if new_name is None:
-        name = datetime.now().strftime("%Y_%m_%d_%H%M")
+        name = datetime.now().strftime("%Y_%m_%d_%H%M%S")
     else:
         name = new_name
-    if balanced_sampling:
+    if balanced:
         name = f"b_{name}"
 
     # Plot the training and validation losses
-    plot_losses(losses, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses")
+    plot_losses(losses, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses", logs=logs)
 
     # Plot the training and validation accuracies
-    plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys")
+    plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys", logs=logs)
 
     # Save the model
     save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}", logs=logs)
@@ -379,7 +422,7 @@ def train_n_models(
         n: int = 30,
         sampling_mode: Literal["all", "except_erased", "only_erased"] = "all",
         dataset_name: Literal["mnist", "cmnist", "mnist"] = "mnist",
-        balanced_sampling: bool = True,
+        balanced: bool = True,
         include_val: bool = False,
         logs: bool = False,
     ) -> Dict[str, Module]:
@@ -389,7 +432,7 @@ def train_n_models(
     Parameters:
         n (int): The number of models to train.
         sampling_mode (Literal["all", "except_erased", "only_erased"]): The sampling mode to use. Can be one of "all", "except_erased", or "only_erased".
-        balanced_sampling (bool): A boolean indicating whether to use balanced sampling or not.
+        balanced (bool): A boolean indicating whether to use balanced sampling or not.
         include_val (bool): A boolean indicating whether to include validation data or not.
         logs (bool): A boolean indicating whether to print logs or not.
 
@@ -405,7 +448,7 @@ def train_n_models(
             new_name=None,
             model=None,
             sampling_mode=sampling_mode,
-            balanced_sampling=balanced_sampling,
+            balanced=balanced,
             dataset_name=dataset_name,
             include_val=include_val,
             logs=logs,
