@@ -172,7 +172,7 @@ class MNIST_CostumDataset(Dataset):
                 current_label = folder
 
             # create a dictionary for each class
-            if current_label not in s:
+            if current_label not in s and current_label in self.classes:
                 s[current_label] = {}
 
             # iterate over all files in the current folder
@@ -236,15 +236,11 @@ class MNIST_CostumDataset(Dataset):
         if self.cls_counter[key] >= self.max_samples_length:
             self.cls_counter[key] = 0
 
-        while True:
-            # update the next class
-            if self.next_cls < 9:
-                self.next_cls += 1
-            else:
-                self.next_cls = 0
-
-            if str(self.next_cls) in self.classes:
-                break
+        # update the next class
+        if self.next_cls < len(self.classes) - 1:
+            self.next_cls += 1
+        else:
+            self.next_cls = 0
 
         return index
 
@@ -269,7 +265,7 @@ class MNIST_CostumDataset(Dataset):
         # - self.next_cls
             
         # first let's get the next class
-        cls = self.next_cls
+        cls = self.classes[self.next_cls]
         index = self.update_counters(str(cls))
 
         # if all samples should be used, we need a different method
@@ -303,7 +299,7 @@ class MNIST_CostumDataset(Dataset):
             # else:
             sample = sample.view(sample.size(0), -1).squeeze() * 1/255
         target = torch.zeros(10)
-        target[cls] = 1
+        target[int(cls)] = 1
 
         return sample, target
 
@@ -338,7 +334,8 @@ class MNIST_CostumDataset(Dataset):
         if os.path.exists(output_dir):
             # print("Data already saved to: ", output_dir)
             return
-        os.makedirs(output_dir)
+        else:
+            os.makedirs(output_dir)
 
         # Iterate through the dataset (train and test set)
         for split in ['train', 'test']:

@@ -6,6 +6,7 @@ import seaborn as sns
 from typing import Dict, List, Literal
 from matplotlib.colors import LinearSegmentedColormap
 from tqdm import tqdm
+import numpy as np
 
 from helper import get_dataset_subsetloaders
 from metrics import calc_singlemodel_metric, calc_multimodel_metric
@@ -66,6 +67,7 @@ def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot 
 
     # Add labels and title
     plt.xlabel('Model')
+    plt.xticks(rotation=30)
     plt.ylabel('Accuracy Score')
     plt.title(title)
 
@@ -84,22 +86,26 @@ def boxplotting_multimodel_eval(
     
     # Get the subsets
     d_gesamt, d_erased, d_remain, d_classes = get_dataset_subsetloaders(dataset_name=dataset_name)
-    subsets = {"D_gesamt": d_gesamt, "D_erased": d_erased, "D_remain": d_remain, "classes": d_classes}
+    subsets = {"D_gesamt": d_gesamt, "D_erased": d_erased, "D_remain": d_remain,}
+    subsets.update({cls: loaders for cls, loaders in d_classes.items()})
     
     metrics = {"D_gesamt": [], "D_erased": [], "D_remain": []}
     metrics.update({k: [] for k in d_classes.keys()})
     
-    # Let's calculate the accuracy for each subset
-    for _, model in tqdm(models_dict.items(), "Evaluating Models", leave=True):
-        for subset_name, subset in tqdm(subsets.items(), "Calculating Accuracies", leave=False):
+    print(f"Starts evaluation for '{dataset_name}'...")
+    # Let's calculate the accuracy for each subset    
+    for subset_name, subset in subsets.items():
+        x = 1
+        for _name, model in models_dict.items():
+            subset_metrics = calc_singlemodel_metric(model, subset, n=x, total=len(models_dict), metric=evaluation)
+            metrics[subset_name].append(subset_metrics)
+            x += 1
 
-            if subset_name == "classes":
-                for class_name, class_subset in tqdm(subset.items(), "Calculating Class Accuracies", leave=False):
-                    class_metrics = calc_singlemodel_metric(model, class_subset, metric=evaluation)
-                    metrics[class_name].append(class_metrics)
-            else:
-                subset_metrics = calc_singlemodel_metric(model, subset)
-                metrics[subset_name].append(subset_metrics)
+        if logs:       
+            print(
+                f"Average Accuracy for {subset_name}: {np.mean(metrics[subset_name]):.4f} - "
+                f"Standard Deviation for {subset_name}: {np.std(metrics[subset_name]):.4f}"
+            )
     if logs:
         print("plotting...")
 

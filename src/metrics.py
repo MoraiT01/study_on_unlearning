@@ -11,13 +11,15 @@ from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
-def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset) -> float:
+def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n: int, total: int) -> float:
     """
     Calculates the accuracy of the model on parsed data
 
     Args:
         model (Module): The model to be evaluated
         testing_loader (DataLoader): A DataLoader containing the evaluation data
+        n (int): The number of the model to be evaluated
+        total (int): The total number of models to be evaluated
 
     Returns:
         float: The average accuracy of the model on the evaluation data
@@ -28,7 +30,7 @@ def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset) -
 
     # Iterate over the evaluation dataset
     with torch.no_grad():  # No need to compute gradients during evaluation
-        for images, labels in tqdm(testing_loader, total=len(testing_loader.dataset), desc=f"Evaluation...",leave=False):
+        for images, labels in tqdm(testing_loader, desc=f"Evaluation model {n}/{total}", leave=False):
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
             # Forward pass
@@ -44,7 +46,7 @@ def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset) -
 
     return avg_accuracy
 
-def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, loss_function = nn.CrossEntropyLoss()) -> float:
+def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int, total:int, loss_function = nn.CrossEntropyLoss()) -> float:
     """
     Calculates the accuracy of the model on parsed data
 
@@ -62,7 +64,7 @@ def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, loss_
 
     # Iterate over the evaluation dataset
     with torch.no_grad():  # No need to compute gradients during evaluation
-        for images, labels in tqdm(testing_loader, desc=f"Loss Evaluation...", leave=False):
+        for images, labels in tqdm(testing_loader, desc=f"Evaluation model {n}/{total}", leave=False):
             # Move the images and labels to the device (CPU or GPU)
             images, labels = images.to(DEVICE), labels.to(DEVICE)
 
@@ -139,12 +141,12 @@ def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device
     # Return average KL divergence over all samples
     return kl_divergence_sum / num_samples
 
-def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "accuracy") -> float:
+def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
     """Serves as a forker for calc_accuracy and calc_loss"""
     if metric == "loss":
-        return calc_loss(model, testing_loader)
+        return calc_loss(model, testing_loader, n, total)
     elif metric == "accuracy":
-        return calc_accuracy(model, testing_loader)
+        return calc_accuracy(model, testing_loader, n, total)
     else:
         raise ValueError(f"Unknown metric: {metric}")
     
