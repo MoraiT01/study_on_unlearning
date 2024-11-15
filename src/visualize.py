@@ -66,9 +66,10 @@ def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot 
     plt.boxplot(data, labels=labels, patch_artist=True)
 
     # Add labels and title
-    plt.xlabel('Model')
+    plt.xlabel('Subsets')
     plt.xticks(rotation=30)
     plt.ylabel('Accuracy Score')
+    plt.ylim(0, 1.0)
     plt.title(title)
 
     # Display the plot
@@ -85,11 +86,11 @@ def boxplotting_multimodel_eval(
         raise Exception(f"Dataset '{dataset_name}' not supported.")
     
     # Get the subsets
-    d_gesamt, d_erased, d_remain, d_classes = get_dataset_subsetloaders(dataset_name=dataset_name)
-    subsets = {"D_gesamt": d_gesamt, "D_erased": d_erased, "D_remain": d_remain,}
+    d_gesamt, d_remain, d_classes = get_dataset_subsetloaders(dataset_name=dataset_name)
+    subsets = {"D_gesamt": d_gesamt, "D_remain": d_remain,}
     subsets.update({cls: loaders for cls, loaders in d_classes.items()})
     
-    metrics = {"D_gesamt": [], "D_erased": [], "D_remain": []}
+    metrics = {"D_gesamt": [], "D_remain": []}
     metrics.update({k: [] for k in d_classes.keys()})
     
     print(f"Starts evaluation for '{dataset_name}'...")

@@ -3,7 +3,7 @@
 import torch
 import os
 from typing import Literal, List
-from random import choice
+from my_random import shared_random_state
 
 from datasets import load_dataset
 from PIL import Image
@@ -156,6 +156,7 @@ class MNIST_CostumDataset(Dataset):
             self.save_mnist_to_folders(root_dir)
 
         self.samples = self._initialize()
+        self.mix_unlearned_samples()
         self.length = self.max_samples_length * len(self.classes) if self.balanced else sum([len(v) for v in self.samples.values()])
 
     def _initialize(self):
@@ -184,6 +185,18 @@ class MNIST_CostumDataset(Dataset):
         self.max_samples_length = min([len(v) for v in s.values()])
         return s
     
+    def mix_unlearned_samples(self):
+        """
+            We need to shuffle the class containing the unlearned samples,
+            otherwise, we might fall into the trap off not including them in the training loop at all.
+            Unlearning makes only sense if the model saw the samples in the first place.
+        """
+        # affected_cls = "5" if self.dataset_name == "cmnist" else "7"
+        for affected_cls in self.classes:
+            keys =  list(self.samples[affected_cls].keys())
+            shared_random_state.shuffle(keys)
+            self.samples[affected_cls] = {n_idx: self.samples[affected_cls][key] for n_idx, key in zip(range(len(keys)), keys)}
+
     def to_be_included(self, file: str, folder: str) -> bool:
         """Checks if the file should be included in the dataset"""
 

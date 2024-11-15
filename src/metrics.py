@@ -5,7 +5,7 @@ from torch import nn
 from tqdm import tqdm
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from typing import Literal
+from typing import Literal, Dict
 
 from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
@@ -80,7 +80,7 @@ def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int
 
     return avg_loss
 
-def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> dict:
+def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
     """
     Calculate the L2 norm of differences between parameters of two models with the same architecture.
 
@@ -102,7 +102,7 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> dict:
         l2_norm = torch.norm(param1 - param2, p=2).item()
         l2_norms[name1] = l2_norm
     
-    return l2_norms
+    return sum(l2_norms.values())
 
 def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device='cpu') -> float:
     """
@@ -141,8 +141,12 @@ def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device
     # Return average KL divergence over all samples
     return kl_divergence_sum / num_samples
 
-def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
-    """Serves as a forker for calc_accuracy and calc_loss"""
+def calc_singlemodel_metric(model: torch.nn.Module, testing_loader: torch.nn.Module, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
+    """
+        Serves as a forker for:
+            - calc_accuracy
+            - calc_loss
+    """
     if metric == "loss":
         return calc_loss(model, testing_loader, n, total)
     elif metric == "accuracy":
@@ -150,6 +154,25 @@ def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_Cos
     else:
         raise ValueError(f"Unknown metric: {metric}")
     
-def calc_multimodel_metric(model1: TwoLayerPerceptron, model2: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal[None] = "") -> float:
-    """Serves as a forker for TODO"""
-    raise NotImplementedError
+def calc_multimodel_metric(model1: torch.nn.Module, model2: torch.nn.Module, testing_loader: MNIST_CostumDataset = None, metric: Literal["kl_div", "l2_norm"] = "l2_norm") -> float:
+    """
+        Serves as a forker for:
+            - kl_divergence_between_models
+            - model_l2_norm_difference
+    """
+    if metric == "kl_div":
+        return kl_divergence_between_models(model1, model2, testing_loader)
+    elif metric == "l2_norm":
+        return model_l2_norm_difference(model1, model2)
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+    
+def calc_mutlimodel_metric_average(modeltype1: Dict[str, torch.nn.Module], modeltype2: Dict[str, torch.nn.Module], testing_loader: MNIST_CostumDataset = None, metric: Literal["kl_div", "l2_norm"] = "l2_norm") -> float:
+    """loops over 'calc_mutlimodel_metric' and averages the results"""
+
+    result = 0
+    for type1 in modeltype1.values():
+        for type2 in modeltype2.values():
+            result = calc_multimodel_metric(type1, type2, testing_loader, metric)
+
+    return result / (len(modeltype1) * len(modeltype2))

@@ -2,17 +2,18 @@
 
 from typing import Literal, Tuple, Dict
 from torch.utils.data import DataLoader
+import torch
+import os
 
-from mlp_dataclass import MNIST_CostumDataset
+from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet
 
-def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist") -> Tuple[DataLoader, DataLoader, DataLoader, Dict[str, DataLoader]]:
+def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist") -> Tuple[DataLoader, DataLoader, Dict[str, DataLoader]]:
     """
     This function creates a tuple of four DataLoaders which can be used to load the
     dataset in different ways.
 
     Returns:
         D_GESAMT: A DataLoader which loads the whole dataset
-        D_ERASED: A DataLoader which loads the erased samples
         D_REMAIN: A DataLoader which loads the remaining samples
         D_CLASSES: A dictionary which contains DataLoaders for the different classes
     """
@@ -30,16 +31,17 @@ def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_
         shuffle=False,
     )
 
-    D_ERASED = DataLoader(
-        dataset=MNIST_CostumDataset(
-            sample_mode="only_erased",
-            train=True,
-            test=True,
-            dataset_name=dataset_name,
-        ),
-        batch_size=8,
-        shuffle=False,
-    )
+    # not necessary, since it's the same as 7/5_erased
+    # D_ERASED = DataLoader(
+    #     dataset=MNIST_CostumDataset(
+    #         sample_mode="only_erased",
+    #         train=True,
+    #         test=True,
+    #         dataset_name=dataset_name,
+    #     ),
+    #     batch_size=8,
+    #     shuffle=False,
+    # )
 
     D_REMAIN = DataLoader(
         dataset=MNIST_CostumDataset(
@@ -66,4 +68,22 @@ def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_
     else:
         raise Exception(f"Dataset '{dataset_name}' not supported.")
 
-    return D_GESAMT, D_ERASED, D_REMAIN, D_CLASSES
+    return D_GESAMT, D_REMAIN, D_CLASSES
+
+def load_models_dict(path: str) -> Dict[str, torch.nn.Module]:
+
+    if "cmnist" in path:
+        model = ConvNet()
+    elif ("mnist" in path) or ("fashion_mnist" in path):
+        model = TwoLayerPerceptron()
+    else:
+        raise Exception(f"Model '{path}' not supported.")
+
+    # load all the models
+    md = {}
+    for list in os.listdir(path):
+        model.load_state_dict(torch.load(path=os.path.join(path, list), weights_only=True))
+        model.eval()
+        md[len(md)] = model
+
+    return md
