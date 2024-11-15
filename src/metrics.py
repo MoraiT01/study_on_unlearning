@@ -104,7 +104,7 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
     
     return sum(l2_norms.values())
 
-def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device='cpu') -> float:
+def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Module, data_loader: DataLoader, device='cpu') -> float:
     """
     Compute the average KL divergence between prediction distributions of two models.
     
