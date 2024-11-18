@@ -82,8 +82,9 @@ def load_models_dict(path: str) -> Dict[str, torch.nn.Module]:
     # load all the models
     md = {}
     for list in os.listdir(path):
-        model.load_state_dict(torch.load(path=os.path.join(path, list), weights_only=True))
-        model.eval()
-        md[len(md)] = model
+        if list not in ["graphs"]:
+            model.load_state_dict(torch.load(f=os.path.join(path, list), weights_only=True))
+            model.eval()
+            md[len(md)] = model
 
     return md

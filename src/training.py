@@ -462,7 +462,7 @@ def train_n_models(
             dataset_name=dataset_name,
             include_val=include_val,
             logs=logs,
-            testing_ensemble=test_ensemble,
+            test_ensemble=test_ensemble,
         )
         models_dict[name] = model
 

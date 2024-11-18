@@ -122,24 +122,31 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
     model1.eval()
     model2.eval()
     
-    kl_divergence_sum = 0.0
+    kl_divergence_list = []
     num_samples = 0
     
     with torch.no_grad():
-        for inputs, _ in data_loader:
+        for inputs, labels in data_loader:
             inputs = inputs.to(device)
+            labels = labels.to(device)
             
+
             # Get prediction logits from both models
             probs1 = model1(inputs)
             probs2 = model2(inputs)
+
+            # Ensure probs are probabilities (apply softmax if needed)
+            probs1 = F.softmax(probs1, dim=1)
+            probs2 = F.softmax(probs2, dim=1)
             
             # Calculate the KL divergence for each sample and sum up
             kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean')
-            kl_divergence_sum += kl_divergence.item() * inputs.size(0)
+
+            kl_divergence_list.append(kl_divergence.item() * inputs.size(0))
             num_samples += inputs.size(0)
     
     # Return average KL divergence over all samples
-    return kl_divergence_sum / num_samples
+    return sum([x/num_samples for x in kl_divergence_list])
 
 def calc_singlemodel_metric(model: torch.nn.Module, testing_loader: torch.nn.Module, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
     """
@@ -170,9 +177,11 @@ def calc_multimodel_metric(model1: torch.nn.Module, model2: torch.nn.Module, tes
 def calc_mutlimodel_metric_average(modeltype1: Dict[str, torch.nn.Module], modeltype2: Dict[str, torch.nn.Module], testing_loader: MNIST_CostumDataset = None, metric: Literal["kl_div", "l2_norm"] = "l2_norm") -> float:
     """loops over 'calc_mutlimodel_metric' and averages the results"""
 
-    result = 0
+    result = 0.0
+    counter = 0
     for type1 in modeltype1.values():
         for type2 in modeltype2.values():
-            result = calc_multimodel_metric(type1, type2, testing_loader, metric)
+            result += calc_multimodel_metric(type1, type2, testing_loader, metric)
+            counter += 1
 
-    return result / (len(modeltype1) * len(modeltype2))
+    return result / counter
