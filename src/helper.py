@@ -73,9 +73,9 @@ def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_
 def load_models_dict(path: str) -> Dict[str, torch.nn.Module]:
 
     if "cmnist" in path:
-        model = ConvNet()
+        modeltype = ConvNet
     elif ("mnist" in path) or ("fashion_mnist" in path):
-        model = TwoLayerPerceptron()
+        modeltype = TwoLayerPerceptron
     else:
         raise Exception(f"Model '{path}' not supported.")
 
@@ -83,6 +83,8 @@ def load_models_dict(path: str) -> Dict[str, torch.nn.Module]:
     md = {}
     for list in os.listdir(path):
         if list not in ["graphs"]:
+            model = modeltype()
+
             model.load_state_dict(torch.load(f=os.path.join(path, list), weights_only=True))
             model.eval()
             md[len(md)] = model

@@ -3,6 +3,7 @@
 """
 import torch
 import numpy as np
+from torch.nn.modules import Module
 from torch.utils.data import DataLoader
 from typing import Literal, Tuple, Dict
 from copy import deepcopy
@@ -79,6 +80,8 @@ class FastEffiecentUnlearning(Unlearner):
         self.model = model
         self.data = unlearned_data
         self.complete_data = complete_data
+        self.lr = model_params[dataset_name]["lr"]
+        self.n_updates = model_params[dataset_name]["n_updates"]
 
         self._initialize(dataset_name=dataset_name)
 
@@ -87,6 +90,16 @@ class FastEffiecentUnlearning(Unlearner):
 
     def __str__(self) -> str:
         return "FastEffiecentUnlearning"
+    
+    def unlearn(self) -> Module:
+        new_model = deepcopy(self.model)
+        new_model.to(DEVICE)
+
+
+        loss_function = torch.nn.CrossEntropyLoss()
+        # named opt_func in the original code
+        optimizer = torch.optim.Adam(new_model.parameters(), lr=self.lr, maximize=True)
+        return 
 
 def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
     if name == "SimpleGradientAscent":
@@ -108,7 +121,8 @@ def unlearn_n_models(
     unlearners = get_unlearners(
         name=which_unlearning,
         dataset_name=dataset_name,
-        args={"models": models, "u_data": unlearned_data, "data": data})
+        args={"models": models, "u_data": unlearned_data, "data": data}
+    )
     
     new_models = {}
     if logs:
@@ -119,4 +133,3 @@ def unlearn_n_models(
             print(f"Unlearned model {k:2}/{len(unlearners):2}...")
 
     return new_models
-
