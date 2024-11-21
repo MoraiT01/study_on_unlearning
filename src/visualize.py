@@ -54,7 +54,7 @@ def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     # Display the heatmap
     plt.show()
 
-def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot of Accuracy Scores for Different Models') -> None:
+def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot of Accuracy Scores for Different Models', evaluation: Literal["Accuracy", "Loss"] = "Accuracy") -> None:
     """Create a box plot of accuracy scores for each parsed list in the diconary."""
 
     # Prepare data for the box plot
@@ -68,7 +68,7 @@ def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot 
     # Add labels and title
     plt.xlabel('Subsets')
     plt.xticks(rotation=30)
-    plt.ylabel('Accuracy Score')
+    plt.ylabel(f'{evaluation} Score')
     plt.ylim(0, 1.0)
     plt.title(title)
 
@@ -78,7 +78,7 @@ def create_boxplots(score_lists: Dict[str, List[float]], title: str = 'Box Plot 
 def boxplotting_multimodel_eval(
         models_dict: Dict[str, torch.nn.Module],
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
-        evaluation: Literal["accuracy", "loss"] = "accuracy",
+        evaluation: Literal["Accuracy", "Loss"] = "Accuracy",
         logs: bool = True) -> None:
     """This function evaluates one model type against the different dataset subsets"""
 
@@ -98,19 +98,19 @@ def boxplotting_multimodel_eval(
     for subset_name, subset in subsets.items():
         x = 1
         for _name, model in models_dict.items():
-            subset_metrics = calc_singlemodel_metric(model, subset, n=x, total=len(models_dict), metric=evaluation)
+            subset_metrics = calc_singlemodel_metric(model, subset, n=x, total=len(models_dict), metric=evaluation.lower())
             metrics[subset_name].append(subset_metrics)
             x += 1
 
         if logs:       
             print(
-                f"Average Accuracy for {subset_name}: {np.mean(metrics[subset_name]):.4f} - "
+                f"Average {evaluation} for {subset_name}: {np.mean(metrics[subset_name]):.4f} - "
                 f"Standard Deviation for {subset_name}: {np.std(metrics[subset_name]):.4f}"
             )
     if logs:
         print("plotting...")
 
     # Create the boxplots
-    create_boxplots(metrics, title=f"Accuracy Scores for Different Subsets of {dataset_name}")
+    create_boxplots(metrics, title=f"{evaluation} Scores for Different Subsets of {dataset_name}", evaluation=evaluation)
 
     return metrics

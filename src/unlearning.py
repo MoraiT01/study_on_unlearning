@@ -130,6 +130,6 @@ def unlearn_n_models(
     for k, model in unlearners.items():
         new_models[k] = model.unlearn()
         if logs:
-            print(f"Unlearned model {k:2}/{len(unlearners):2}...")
+            print(f"Unlearned model {k+1:2}/{len(unlearners):2}...")
 
     return new_models
