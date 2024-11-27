@@ -1,22 +1,22 @@
-"""contains all the code necessary for running the MU algorithm proposed by https://github.com/vikram2000b/Fast-Machine-Unlearning"""
+"""
+    contains all the code necessary for running the MU algorithm inspired by https://github.com/vikram2000b/Fast-Machine-Unlearning
+    Instead of unlearning one entire class, we focus on unlearning a subset of on class, grouped together by one shared feature
+        -> hence: Feature Unlearning
+"""
 
 # import required libraries
 import numpy as np
-import tarfile
-import os
 
-from typing import Literal, Tuple
+from typing import Literal, Tuple, Dict
 import torch
 from torch import nn
 import torch.nn.functional as F
-from torchvision.datasets.utils import download_url
-from torchvision.datasets import ImageFolder
 from torch.utils.data import DataLoader, Dataset
-import torchvision.transforms as tt
-from torchvision.models import resnet18
 
 # my
 from training import model_params
+from mlp_dataclass import MNIST_CostumDataset
+from my_random import shared_random_state
 
 torch.manual_seed(100)
 
@@ -25,13 +25,6 @@ DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 def accuracy(outputs, labels):
     _, preds = torch.max(outputs, dim=1)
     return torch.tensor(torch.sum(preds == labels).item() / len(preds))
-
-def training_step(model, batch):
-    images, labels = batch
-    images, labels = images.to(DEVICE), labels.to(DEVICE)
-    out = model(images)                  
-    loss = F.cross_entropy(out, labels) 
-    return loss
 
 def validation_step(model, batch):
     images, labels = batch
@@ -48,323 +41,262 @@ def validation_epoch_end(model, outputs):
     epoch_acc = torch.stack(batch_accs).mean()      
     return {'Loss': epoch_loss.item(), 'Acc': epoch_acc.item()}
 
-def epoch_end(model, epoch, result):
-    print("Epoch [{}], last_lr: {:.5f}, train_loss: {:.4f}, val_loss: {:.4f}, val_acc: {:.4f}".format(
-        epoch, result['lrs'][-1], result['train_loss'], result['Loss'], result['Acc']))
-    
-def distance(model,model0):
-    distance=0
-    normalization=0
-    for (k, p), (k0, p0) in zip(model.named_parameters(), model0.named_parameters()):
-        space='  ' if 'bias' in k else ''
-        current_dist=(p.data0-p0.data0).pow(2).sum().item()
-        current_norm=p.data0.pow(2).sum().item()
-        distance+=current_dist
-        normalization+=current_norm
-    print(f'Distance: {np.sqrt(distance)}')
-    print(f'Normalized Distance: {1.0*np.sqrt(distance/normalization)}')
-    return 1.0*np.sqrt(distance/normalization)
-
 @torch.no_grad()
 def evaluate(model, val_loader):
     model.eval()
     outputs = [validation_step(model, batch) for batch in val_loader]
     return validation_epoch_end(model, outputs)
 
-def get_lr(optimizer):
-    for param_group in optimizer.param_groups:
-        return param_group['lr']
-
-def fit_one_cycle(epochs, model, train_loader, val_loader, optimizer):
-    torch.cuda.empty_cache()
-    history = []
-    
-    optimizer = optimizer
-
-    sched = torch.optim.lr_scheduler.StepLR(optimizer, step_size=5, gamma=0.1)
- 
-    for epoch in range(epochs): 
-        model.train()
-        train_losses = []
-        lrs = []
-        for batch in train_loader:
-            loss = training_step(model, batch)
-            train_losses.append(loss)
-            loss.backward()
-        
-            
-            optimizer.step()
-            optimizer.zero_grad()
-            
-            lrs.append(get_lr(optimizer))
-                    
-        # Validation phase
-        result = evaluate(model, val_loader)
-        result['train_loss'] = torch.stack(train_losses).mean().item()
-        result['lrs'] = lrs
-        epoch_end(model, epoch, result)
-        history.append(result)
-        sched.step(result['Loss'])
-    return history
-
-
-# defining the noise structure
 class Noise(nn.Module):
-    def __init__(self, samples):
+    def __init__(self, *dim):
         super().__init__()
-        self.noise = torch.nn.Parameter(samples, requires_grad = True)
+        # Trainieren anstatt einem Bilde einen echten Generator
+        # einfach Vektor mal eine Matrix, mit einer Aktivierung, müsste man ausprobieren
+        self.noise = torch.nn.Parameter(torch.randn(*dim), requires_grad = True)
+
+        self.f1 = nn.Linear(dim[1], dim[1])
+        self.f2 = nn.Linear(dim[1], dim[1])
         
     def forward(self):
         return self.noise
 
-class ToForget(Dataset):
-    def __init__(
-            self,
-            forget_data: DataLoader,
-            model: torch.nn.Module,
-            dataset_name: str,
-            ):
-        super().__init__()
+def prepare_loaders(forget_data: Dataset, model: torch.nn.Module) -> Tuple[Dict, DataLoader, Dict]:
 
-        self.lr = model_params[dataset_name]["lr"]
-        self.samples = self._initialize(forget_data, model)
+    noises = {}
+    og_labels = {}
+    created_labels =  {}
+    for index, data in enumerate(DataLoader(forget_data, batch_size=1, shuffle=False)): # iterate over forget_data):
+        s, l = data
 
-    def _initialize(self, forget_data, model) -> Dataset:
-
-        new_s = {}
-        for k, v in self.samples.items():
-            new_s[len(new_s)] = self.noise_maxing_per_batch(batch=v, model=model, n_epochs=5)
-
-
-        return new_s
-
-    def noise_maxing_per_batch(self, batch: Tuple[torch.Tensor, torch.Tensor], model: torch.nn.Module, n_epochs: int = 5, logs: False) -> torch.Tensor:
-
-        # "Optiming loss for class {}".format(cls))
-        noises = Noise(batch[0]).to(DEVICE)
-        labels = batch[1]
-
-        loss_function = torch.nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(noises.parameters(), lr=self.lr, maximize=True)
-
-        num_steps = 8
-        class_label = cls
-        for epoch in range(n_epochs):
-            total_loss = []
-            
-            outputs = model(inputs)
-            loss = - loss_function(outputs, labels) + 0.1 * torch.mean(torch.sum(torch.square(inputs), [1, 2, 3]))
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            total_loss.append(loss.cpu().detach().numpy())
-
-            if logs:
-                print("Loss: {}".format(np.mean(total_loss)))
-
-        return None
+        new_l = F.softmax(model(s.to(DEVICE)), dim=1)
         
-    def __len__(self):
-        return len(self.samples)
+        noises[index] = Noise(s.shape).to(DEVICE)
+        created_labels[index] = new_l[0].to(DEVICE)
+        og_labels[index] = new_l.to(DEVICE)
+        # Ursprünglich waren hier die Labels der der Klassen gemeint
+        # Jedoch entschied ich mich dagegen
+        # Der prognostizierte Wahrkeitsvektor ist eine andere Darstellung des Samples,
+        # Wir wollen nicht die Klasse unlearnen, sonder das Sample/das Feature
 
-    def __getitem__(self, idx):
+    # the first Dataloader contains the tunable samples
+    n = noises
+
+    # the second Dataloader contains the new labels
+    # Shuffle True, to create more variance
+    c = DataLoader(
+        created_labels,
+        batch_size=1,
+        shuffle=True,
+    )
+
+    # original labels shall be kept too
+    o = og_labels
+
+    return n, c, o
+
+def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> DataLoader:
     
-# list of all classes
-classes = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    noises, created_labels, og_labels = prepare_loaders(forget_data, model)
 
-# classes which are required to un-learn
-classes_to_forget = [0, 2]
+    model.to(DEVICE)
 
-# classwise list of samples
-num_classes = 10
-classwise_train = {}
-for i in range(num_classes):
-    classwise_train[i] = []
-
-for img, label in train_ds:
-    classwise_train[label].append((img, label))
-    
-classwise_test = {}
-for i in range(num_classes):
-    classwise_test[i] = []
-
-for img, label in valid_ds:
-    classwise_test[label].append((img, label))
-
-# getting some samples from retain classes
-num_samples_per_class = 1000
-
-retain_samples = []
-for i in range(len(classes)):
-    if classes[i] not in classes_to_forget:
-        retain_samples += classwise_train[i][:num_samples_per_class]
-
-# retain validation set
-retain_valid = []
-for cls in range(num_classes):
-    if cls not in classes_to_forget:
-        for img, label in classwise_test[cls]:
-            retain_valid.append((img, label))
-            
-# forget validation set
-forget_valid = []
-for cls in range(num_classes):
-    if cls in classes_to_forget:
-        for img, label in classwise_test[cls]:
-            forget_valid.append((img, label))
-            
-forget_valid_dl = DataLoader(forget_valid, batch_size, num_workers=3, pin_memory=True)
-retain_valid_dl = DataLoader(retain_valid, batch_size*2, num_workers=3, pin_memory=True)
-
-# loading the model
-model = resnet18(num_classes = 10).to(device = device)
-model.load_state_dict(torch.load("ResNET18_CIFAR10_ALL_CLASSES.pt"))
-
-
-### Noise Maximization Generation
-%%time
-
-noises = {}
-for cls in classes_to_forget:
-    print("Optiming loss for class {}".format(cls))
-    noises[cls] = Noise(batch_size, 3, 32, 32).cuda()
-    opt = torch.optim.Adam(noises[cls].parameters(), lr = 0.1)
-
-    num_epochs = 5
-    num_steps = 8
-    class_label = cls
+    num_epochs = 5 # Hyperparameter
+    step_size  = 8 # Hyperparameter
     for epoch in range(num_epochs):
         total_loss = []
-        for batch in range(num_steps):
-            inputs = noises[cls]()
-            labels = torch.zeros(batch_size).cuda()+class_label
+        for index, noise_obj in noises.items(): # This part could be made more efficient, Parallelization, Synchronous/Asyncronous Processing
+            
+            # interate over all Noise Batches in noises
+            # and combined it with the samples
+            # each batch needs to be put to the optimizer anew (This might be made more efficient)
+            optimizers = torch.optim.Adam(noise_obj.parameters(), lr = 0.1) # Hyperparameter
+            input_batch = torch.Tensor(noise_obj()).to(DEVICE)
+
+            step = 0
+            for l in created_labels: # Der Loop ist unnötig
+                outputs = model(input_batch)
+                loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch)))
+                loss.backward(retain_graph=True) # Sollte weg, da die Schleife weg soll
+          
+                # for logging
+                total_loss.append(loss.cpu().detach().numpy())
+
+                step += 1
+                if step >= step_size:
+                    break
+
+            optimizers.step()
+            
+        print("Epoch: {}, Loss: {}".format(epoch, np.mean(total_loss)))
+
+    all_noises = {}
+    for idx in range(len(noises)):
+        next_add = noises[idx]().cpu().detach()
+        for b_id in range(next_add.size(0)):
+            all_noises[len(all_noises)] = (next_add[b_id], og_labels[idx][b_id].clone().detach())
+    
+    return all_noises
+
+class FeatureMU_Loader(Dataset):
+    def __init__(self, noisy_data, retain_data):
+        self.noisy_data = noisy_data
+        self.retain_data = retain_data
+
+    def __len__(self):
+        return len(self.noisy_data) + len(self.retain_data)
+
+    def __getitem__(self, idx):
+        if idx < len(self.noisy_data):
+            return self.noisy_data.__getitem__(idx)
+        else:
+            return self.retain_data.__getitem__(idx - len(self.noisy_data))
+
+def impairing_phase(noisy_data, retain_loader: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
+
+    noisy_loader = DataLoader(
+        dataset=FeatureMU_Loader(noisy_data, retain_loader),
+        batch_size=8, 
+        shuffle=True
+    )
+
+    optimizer = torch.optim.Adam(model.parameters(), lr = 0.02) # Hyperparameter
+
+    for epoch in range(1): # Hyperparameter  
+        model.train(True)
+        running_loss = 0.0
+        running_acc = 0
+        for i, data in enumerate(noisy_loader):
+            inputs, labels = data
+            inputs, labels = inputs.cuda(), torch.tensor(labels).cuda()
+
+            optimizer.zero_grad()
             outputs = model(inputs)
-            loss = -F.cross_entropy(outputs, labels.long()) + 0.1*torch.mean(torch.sum(torch.square(inputs), [1, 2, 3]))
-            opt.zero_grad()
+            loss = F.cross_entropy(outputs, labels)
             loss.backward()
-            opt.step()
-            total_loss.append(loss.cpu().detach().numpy())
-        print("Loss: {}".format(np.mean(total_loss)))
+            optimizer.step()
 
+            # print statistics
+            running_loss += loss.item() * inputs.size(0)
+            out = torch.argmax(outputs.detach(),dim=1)
+            assert out.shape==labels.shape
+            running_acc += (labels==out).sum().item()
+        if logs:
+            print(f"Train loss {epoch+1}: {running_loss/len(noisy_loader)}, Train Acc:{running_acc*100/len(noisy_loader)}%")
 
-### Impair
-%%time
+    return model
 
-batch_size = 256
-noisy_data = []
-num_batches = 20
-class_num = 0
+def repairing_phase(retain_data: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
+    
+    heal_loader = torch.utils.data.DataLoader(retain_data, batch_size=8, shuffle = True)
 
-for cls in classes_to_forget:
-    for i in range(num_batches):
-        batch = noises[cls]().cpu().detach()
-        for i in range(batch[0].size(0)):
-            noisy_data.append((batch[i], torch.tensor(class_num)))
+    optimizer = torch.optim.Adam(model.parameters(), lr = 0.01) # Hyperparameter
 
-other_samples = []
-for i in range(len(retain_samples)):
-    other_samples.append((retain_samples[i][0].cpu(), torch.tensor(retain_samples[i][1])))
-noisy_data += other_samples
-noisy_loader = torch.utils.data.DataLoader(noisy_data, batch_size=256, shuffle = True)
+    for epoch in range(1): # Hyperparameter
+        model.train(True)
+        running_loss = 0.0
+        running_acc = 0
+        for i, data in enumerate(heal_loader):
+            inputs, labels = data
+            inputs, labels = inputs.cuda(), torch.tensor(labels).cuda()
 
-
-optimizer = torch.optim.Adam(model.parameters(), lr = 0.02)
-
-
-for epoch in range(1):  
-    model.train(True)
-    running_loss = 0.0
-    running_acc = 0
-    for i, data in enumerate(noisy_loader):
-        inputs, labels = data
-        inputs, labels = inputs.cuda(),torch.tensor(labels).cuda()
-
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = F.cross_entropy(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        # print statistics
-        running_loss += loss.item() * inputs.size(0)
-        out = torch.argmax(outputs.detach(),dim=1)
-        assert out.shape==labels.shape
-        running_acc += (labels==out).sum().item()
-    print(f"Train loss {epoch+1}: {running_loss/len(train_ds)},Train Acc:{running_acc*100/len(train_ds)}%")
-
-
-### Repair
-%%time
-
-heal_loader = torch.utils.data.DataLoader(other_samples, batch_size=256, shuffle = True)
-
-optimizer = torch.optim.Adam(model.parameters(), lr = 0.01)
-
-
-for epoch in range(1):  
-    model.train(True)
-    running_loss = 0.0
-    running_acc = 0
-    for i, data in enumerate(heal_loader):
-        inputs, labels = data
-        inputs, labels = inputs.cuda(),torch.tensor(labels).cuda()
-
-        optimizer.zero_grad()
-        outputs = model(inputs)
-        loss = F.cross_entropy(outputs, labels)
-        loss.backward()
-        optimizer.step()
-
-        # print statistics
-        running_loss += loss.item() * inputs.size(0)
-        out = torch.argmax(outputs.detach(),dim=1)
-        assert out.shape==labels.shape
-        running_acc += (labels==out).sum().item()
-    print(f"Train loss {epoch+1}: {running_loss/len(train_ds)},Train Acc:{running_acc*100/len(train_ds)}%")
-
-def noise_maximization() -> DataLoader:
-    pass
-
-def impairing_phase() -> torch.nn.Module:
-    pass
-
-def repairing_phase() -> torch.nn.Module:
-    pass
+            optimizer.zero_grad()
+            outputs = model(inputs)
+            loss = F.cross_entropy(outputs, labels)
+            loss.backward()
+            optimizer.step()
+            
+            # print statistics
+            running_loss += loss.item() * inputs.size(0)
+            out = torch.argmax(outputs.detach(),dim=1)
+            assert out.shape==labels.shape
+            running_acc += (labels==out).sum().item()
+        print(f"Train loss {epoch+1}: {running_loss/len(retain_data)},Train Acc:{running_acc*100/len(retain_data)}%")
 
 def _main(
         model: torch.nn.Module,
-        forget_data: DataLoader,
-        retain_data: DataLoader,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
+        logs: bool = False,
     ) -> torch.nn.Module:
+
     model.to(DEVICE)
 
-    noise_maximization()
+    # Validation Dataloaders
+    forget_valid_dl = DataLoader(
+        dataset = MNIST_CostumDataset(
+            sample_mode="only_erased",
+            train=False,
+            test=True,
+            dataset_name=dataset_name,
+        ),
+        batch_size=8,
+        shuffle=False,
+    )
+    retain_valid_dl = DataLoader(
+        dataset = MNIST_CostumDataset(
+            sample_mode="except_erased",
+            train=False,
+            test=True,
+            dataset_name=dataset_name,
+        ),
+        batch_size=8,
+        shuffle=False,
+    )
 
-    impairing_phase()
+    # (Re)Training Dataloaders
+    noise_datadict = noise_maximization(
+        forget_data=MNIST_CostumDataset(
+            sample_mode="only_erased",
+            train=True,
+            test=False,
+            dataset_name=dataset_name,
+        ),
+        model=model,
+        logs=logs,
+    )
+    retain_data = MNIST_CostumDataset(
+            sample_mode="except_erased",
+            train=True,
+            test=False,
+            balanced=True,
+            dataset_name=dataset_name,
+        )
+    # We need to make sure that the cls are balanced
+    retain_data.length = len(noise_datadict)
+    
+    impaired_model = impairing_phase(
+        noisy_data=noise_datadict,
+        retain_loader=retain_data,
+        model=model,
+        logs=logs,
+    )
 
-    print("Performance of Standard Forget Model on Forget Class")
-    history = [evaluate(model, forget_valid_dl)]
-    print("Accuracy: {}".format(history[0]["Acc"]*100))
-    print("Loss: {}".format(history[0]["Loss"]))
+    if logs:
+        print("Performance of Standard Forget Model on Forget Class")
+        history = [evaluate(impaired_model, forget_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
 
-    print("Performance of Standard Forget Model on Retain Class")
-    history = [evaluate(model, retain_valid_dl)]
-    print("Accuracy: {}".format(history[0]["Acc"]*100))
-    print("Loss: {}".format(history[0]["Loss"]))
+        print("Performance of Standard Forget Model on Retain Class")
+        history = [evaluate(impaired_model, retain_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
 
 
-    repairing_phase()
+    repaired_model = repairing_phase(
+        retain_data=retain_data,
+        model=impaired_model,
+        logs=logs,
+    )
 
-    print("Performance of Standard Forget Model on Forget Class")
-    history = [evaluate(model, forget_valid_dl)]
-    print("Accuracy: {}".format(history[0]["Acc"]*100))
-    print("Loss: {}".format(history[0]["Loss"]))
+    if logs:
+        print("Performance of Standard Forget Model on Forget Class")
+        history = [evaluate(repaired_model, forget_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
 
-    print("Performance of Standard Forget Model on Retain Class")
-    history = [evaluate(model, retain_valid_dl)]
-    print("Accuracy: {}".format(history[0]["Acc"]*100))
-    print("Loss: {}".format(history[0]["Loss"]))
+        print("Performance of Standard Forget Model on Retain Class")
+        history = [evaluate(repaired_model, retain_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
 
-    new_model = None
-    return new_model
+    return repaired_model
