@@ -22,6 +22,7 @@ import math
 torch.manual_seed(100)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+BATCH_SIZE = 8
 
 def accuracy(outputs, labels):
     _, preds = torch.max(outputs, dim=1)
@@ -52,16 +53,18 @@ class NoiseGen(nn.Module):
     def __init__(self, dim):
         super().__init__()
         self.dim = dim
-        self.noise = torch.randn(*dim)
+        self.start_dims = 100
 
-        self.f1 = nn.Linear(math.prod(self.dim), 1000)
+        self.f1 = nn.Linear(self.start_dims, 1000)
         self.f2 = nn.Linear(1000, math.prod(self.dim))
-        
+
+    # forward pass   
     def forward(self):
-        # Shape to correct dims
-        x = torch.randn(*self.dim)
+        # random starting noise
+        x = torch.randn(self.start_dims)
         x = x.flatten()
 
+        # from noise to learnable patterns
         x = self.f1(x)
         x = torch.relu(x)
         x = self.f2(x)
@@ -70,7 +73,7 @@ class NoiseGen(nn.Module):
         reshaped_tensor = x.view(self.dim)
         return reshaped_tensor
 
-def train_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, DataLoader, Dict]:
+def train_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, Dict, Dict]:
 
     noises = {}
     og_labels = {}
@@ -91,20 +94,21 @@ def train_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple
 
     # the second Dataloader contains the new labels
     # Shuffle True, to create more variance
-    c = DataLoader(
-        created_labels,
-        batch_size=8,
-        shuffle=True,
-    )
+    c = created_labels
 
     # original labels shall be kept too
     o = og_labels
 
     return noises, c, o
 
-def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> DataLoader:
+def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> Tuple[NoiseGen, torch.Tensor]:
     
     noise_generator, created_labels, original_labels = train_noise_generator(forget_data, model)
+    created_l_loader = DataLoader(
+        created_labels,
+        batch_size=BATCH_SIZE,
+        shuffle=True,
+    )
 
     model.to(DEVICE)
     optimizers = torch.optim.Adam(noise_generator.parameters(), lr = 0.1) # Hyperparameter
@@ -113,20 +117,22 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
 
     num_epochs = 5 # Hyperparameter
     step_size  = 100 # Hyperparameter
+
+    # TODO überarbeiten, NoiseGenerator sollte ...
     for epoch in range(num_epochs):
         total_loss = []
         step = 0
-        for l in created_labels: # Der Loop ist unnötig
+        for l in created_l_loader: # Der Loop ist unnötig
             # Firstly, generate the noise
             input_batch = None
-            for i in range(8):	# My Standard Batchsize
+            for i in range(BATCH_SIZE):	# My Standard Batchsize
                 new = noise_generator().to(DEVICE)
                 input_batch = new if input_batch == None else torch.cat((input_batch, new), dim=0)
 
             outputs = model(input_batch)
             loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch)))
             loss.backward(retain_graph=True) # Sollte weg, da die Schleife weg soll
-        
+
             # for logging
             total_loss.append(loss.cpu().detach().numpy())
 
@@ -143,17 +149,17 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
     return noise_generator, created_label
 
 class FeatureMU_Loader(Dataset):
-    def __init__(self, noise_generator, label4noise, number_of_noise, retain_data):
+    def __init__(self, noise_generator,label4noise, number_of_noise, retain_data):
         self.noise_gen = noise_generator
         self.retain_data = retain_data
-        self.n = number_of_noise
+        self.number_of_noise = number_of_noise
         self.label4noise = label4noise
 
     def __len__(self):
-        return len(self.noisy_data) + len(self.retain_data)
+        return len(self.number_of_noise) + len(self.retain_data)
 
     def __getitem__(self, idx):
-        if idx < self.n:
+        if idx < self.number_of_noise:
             return self.noise_gen(), self.label4noise
         else:
             return self.retain_data.__getitem__(idx - self.n)
@@ -161,7 +167,7 @@ class FeatureMU_Loader(Dataset):
 def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise: torch.Tensor, retain_loader: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
 
     noisy_loader = DataLoader(
-        dataset=FeatureMU_Loader(noise_generator(), label4noise, number_of_noise, retain_loader),
+        dataset=FeatureMU_Loader(noise_generator, label4noise, number_of_noise, retain_loader),
         batch_size=8, 
         shuffle=True
     )
@@ -248,18 +254,20 @@ def _main(
         batch_size=8,
         shuffle=False,
     )
+    data_forget = MNIST_CostumDataset(
+        sample_mode="only_erased",
+        train=True,
+        test=False,
+        dataset_name=dataset_name,
+    )
 
     # (Re)Training Dataloaders
-    noise_datadict = noise_maximization(
-        forget_data=MNIST_CostumDataset(
-            sample_mode="only_erased",
-            train=True,
-            test=False,
-            dataset_name=dataset_name,
-        ),
+    noise_gen, noise_create_label = noise_maximization(
+        forget_data=data_forget,
         model=model,
         logs=logs,
     )
+
     retain_data = MNIST_CostumDataset(
             sample_mode="except_erased",
             train=True,
@@ -268,11 +276,13 @@ def _main(
             dataset_name=dataset_name,
         )
     # We need to make sure that the cls are balanced
-    retain_data.length = len(noise_datadict)
+    retain_data.length = len(data_forget) * len(retain_data.classes)
     
     impaired_model = impairing_phase(
-        noisy_data=noise_datadict,
-        retain_loader=retain_data,
+        noise_generator=noise_gen,
+        number_of_noise=len(data_forget),
+        label4noise=noise_create_label,
+        retain_data=retain_data,
         model=model,
         logs=logs,
     )
