@@ -10,6 +10,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 from training import model_params
+from fastmu import _main
 
 from abc import ABC, abstractmethod
 # Set device (use GPU if available)
@@ -29,8 +30,20 @@ class Unlearner(ABC):
 # -> Gradient Ascent on forget Samples
 
 class SimpleGradientAscent(Unlearner):
+    """
+    The Simple Gradient Ascent unlearning algorithm.
 
+    This algorithm is the most intuitive unlearning algorithm. It simply performs gradient ascent on the samples which should be unlearned.
+    """
     def __init__(self, model: torch.nn.Module, unlearned_data: DataLoader, dataset_name: Literal["mnist", "cmnist", "fashion_mnist"]) -> None:
+        """
+        Initializes the SimpleGradientAscent unlearning algorithm.
+
+        Parameters:
+            model (torch.nn.Module): The model to be unlearned.
+            unlearned_data (DataLoader): The data which should be unlearned.
+            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset.
+        """
         self.model = model
         self.unlearned_data = unlearned_data
 
@@ -44,10 +57,16 @@ class SimpleGradientAscent(Unlearner):
         # self.eval_steps = model_params[dataset_name]["eval_steps"]
 
     def __str__(self) -> str:
+        """Returns a string representation of the unlearning algorithm"""
         return "SimpleGradientAscent"
     
     def unlearn(self,) -> torch.nn.Module:
-        """Unlearns the model; Copys the model first, unlearns and return the new model"""
+        """
+        Unlearns the model; Copys the model first, unlearns and return the new model
+
+        Returns:
+            torch.nn.Module: The new model after the unlearning process.
+        """
         new_model = deepcopy(self.model)
         new_model.to(DEVICE)
 
@@ -68,40 +87,63 @@ class SimpleGradientAscent(Unlearner):
 
         return new_model
 
+
 class FastEffiecentUnlearning(Unlearner):
+    """
+    The Fast Machine Unlearning algorithm.
+
+    This algorithm is inspired by the paper "Fast Machine Unlearning" by Vikram et al.
+    """
 
     def __init__(
             self,
             model: torch.nn.Module,
-            unlearned_data: DataLoader,
-            complete_data: DataLoader,
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
             ) -> None:
+        """
+        Initializes the FastEffiecentUnlearning algorithm.
+
+        Parameters:
+            model (torch.nn.Module): The model to be unlearned.
+            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset.
+        """
         self.model = model
-        self.data = unlearned_data
-        self.complete_data = complete_data
-        self.lr = model_params[dataset_name]["lr"]
-        self.n_updates = model_params[dataset_name]["n_updates"]
-
-        self._initialize(dataset_name=dataset_name)
-
-    def _initialize(self, dataset_name) -> None:
-        pass
+        self.dataset_name = dataset_name
 
     def __str__(self) -> str:
         return "FastEffiecentUnlearning"
     
     def unlearn(self) -> Module:
+        """
+        Unlearns the model according to the FastEffiecentUnlearning algorithm.
+
+        Returns:
+            Module: The model after unlearning.
+        """
         new_model = deepcopy(self.model)
         new_model.to(DEVICE)
 
+        new_model = _main(
+            model=new_model,
+            dataset_name=self.dataset_name,
+            logs=False,
+            )
 
-        loss_function = torch.nn.CrossEntropyLoss()
-        # named opt_func in the original code
-        optimizer = torch.optim.Adam(new_model.parameters(), lr=self.lr, maximize=True)
-        return 
+        return new_model
 
 def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
+    """
+    Returns a dictionary of Unlearners for all models in args["models"].
+
+    Parameters:
+        name (Literal["SimpleGradientAscent", "FastEffiecentUnlearning"]): The name of the unlearning algorithm to use.
+        dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to use.
+        args (dict, optional): Additional arguments to pass to the Unlearner. Defaults to None.
+
+    Returns:
+        Dict[str, Unlearner]: A dictionary of Unlearners, keyed by model name.
+    """
+    
     if name == "SimpleGradientAscent":
         return {k: SimpleGradientAscent(v, args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
     elif name == "FastEffiecentUnlearning":
@@ -117,6 +159,20 @@ def unlearn_n_models(
         data: DataLoader = None,
         logs: bool = True,
         ) -> Dict[str, torch.nn.Module]:
+    """
+    Unlearns a set of models using the specified unlearning algorithm.
+
+    Parameters:
+        models (Dict[str, torch.nn.Module]): A dictionary of models to be unlearned, keyed by model name.
+        unlearned_data (DataLoader): DataLoader containing the data to be unlearned from the models.
+        dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset the models were trained on.
+        which_unlearning (Literal["SimpleGradientAscent", "FastEffiecentUnlearning"]): The unlearning algorithm to use.
+        data (DataLoader, optional): Additional DataLoader for retained data, if needed by the unlearning algorithm.
+        logs (bool, optional): Whether to print logs during the unlearning process. Defaults to True.
+
+    Returns:
+        Dict[str, torch.nn.Module]: A dictionary of unlearned models, keyed by model name.
+    """
     
     unlearners = get_unlearners(
         name=which_unlearning,
