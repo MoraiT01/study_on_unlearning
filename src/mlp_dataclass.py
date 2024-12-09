@@ -350,10 +350,11 @@ class MNIST_CostumDataset(Dataset):
         else:
             os.makedirs(output_dir)
 
+        listings, new_folder_name = get_listings(self.dataset_name)
         # Iterate through the dataset (train and test set)
         for split in ['train', 'test']:
             data_split = dataset[split]
-
+            
             # Loop over each sample in the dataset
             for idx, sample in enumerate(data_split):
                 image, label = sample['image'], sample['label']
@@ -371,8 +372,8 @@ class MNIST_CostumDataset(Dataset):
 
                 # Create the directory for the class if it doesn't exist
                 # first we need to check, if it is listed on the to unlearn sample
-                listings, new_folder_name = get_listings(self.dataset_name)
-                if name in listings:
+                # Original: if name in listings str(label) in new_folder_name:
+                if name not in listings and str(label) in new_folder_name: 
                     class_dir = os.path.join(output_dir, new_folder_name)
                 else:
                     class_dir = os.path.join(output_dir, str(label))

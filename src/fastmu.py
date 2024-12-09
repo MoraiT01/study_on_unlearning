@@ -18,15 +18,18 @@ from training import model_params
 from mlp_dataclass import MNIST_CostumDataset
 from my_random import shared_random_state
 import math
+import datetime
+from tqdm import tqdm
 
 torch.manual_seed(100)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-BATCH_SIZE = 8
 
 def accuracy(outputs, labels):
     _, preds = torch.max(outputs, dim=1)
-    return torch.tensor(torch.sum(preds == labels).item() / len(preds))
+    _, l = torch.max(labels, dim=1)
+    correct = torch.sum(preds == l).item()
+    return torch.tensor(correct / len(preds))
 
 def validation_step(model, batch):
     images, labels = batch
@@ -89,7 +92,7 @@ class NoiseGen(nn.Module):
         reshaped_tensor = x.view(self.dim)
         return reshaped_tensor
 
-def train_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, Dict, Dict]:
+def prep_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, Dict, Dict]:
     """
     Creates a noise generator to generate noise which mimics the data in forget_data.
 
@@ -124,6 +127,43 @@ def train_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple
 
     return noises, created_labels, og_labels
 
+class NoiseDataset(Dataset):
+    """
+    A DataLoader which uses a noise generator to generate data and labels.
+
+    Args:
+        noise_generator (NoiseGen): The noise generator to use.
+        noise_labels (Dict[int, torch.Tensor] | torch.Tensor): The labels to use. If a tensor, it is used as the labels for all samples. If a dict, it is used as a mapping of indices to labels.
+        number_of_noise (int, optional): The number of noise samples to generate. Defaults to 100.
+    """
+
+    def __init__(self, noise_generator: NoiseGen, noise_labels: Dict[int, torch.Tensor] | torch.Tensor, number_of_noise: int = 100,):
+
+        self.noise_generator = noise_generator
+        self.noise_labels  = noise_labels
+        self.number_of_noise = number_of_noise if isinstance(self.noise_labels, torch.Tensor) else len(self.noise_labels)
+
+    def __len__(self) -> int:
+        """
+        The number of samples in the dataset.
+
+        Returns:
+            int: The number of samples in the dataset.
+        """
+        return self.number_of_noise
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns a sample from the dataset.
+
+        Args:
+            idx (int): The index of the sample.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing the sample and the label.
+        """
+        return self.noise_generator(), self.noise_labels if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
+
 def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> Tuple[NoiseGen, Dict[int, torch.Tensor] | torch.Tensor]:
     """
     This function trains a noise generator to maximize the output of a model on given labels.
@@ -138,29 +178,25 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
             - The trained NoiseGen model.
             - The mean of the labels which were used to train the noise generator.
     """
-    noise_generator, created_labels, _ = train_noise_generator(forget_data, model)
-    created_l_loader = DataLoader(
-        created_labels,
-        batch_size=BATCH_SIZE,
+    noise_generator, created_labels, _ = prep_noise_generator(forget_data, model)
+    noise_loader = DataLoader(
+        dataset=NoiseDataset(noise_generator, created_labels),
+        batch_size=32,
         shuffle=True,
     )
 
     model.to(DEVICE)
-    optimizers = torch.optim.Adam(noise_generator.parameters(), lr = 0.1) # Hyperparameter
-    num_epochs = 100 # Hyperparameter
+    model.eval()
+    optimizers = torch.optim.Adam(noise_generator.parameters(), lr = 0.02) # Hyperparameter
+    num_epochs = 20 # Hyperparameter
     # Optional learning rate scheduler
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/5), gamma=0.1)
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/3), gamma=0.1)
 
-    for epoch in range(num_epochs):
+    epoch = 0
+    while True:
         total_loss = []
 
-        for l in created_l_loader:
-
-            # Firstly, generate the noise
-            input_batch = None
-            for i in range(len(l)):	# My Standard Batchsize
-                new = noise_generator().to(DEVICE).unsqueeze(0)
-                input_batch = new if input_batch == None else torch.cat((input_batch, new), dim=0)
+        for input_batch, l in noise_loader:
 
             outputs = model(input_batch)
             loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch)))
@@ -172,9 +208,17 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
             total_loss.append(loss.cpu().detach().numpy())
 
         # scheduler.step()
-        if (epoch+1)%5 == 0 and logs:    
-            print("Epoch: {}, Loss: {}".format(epoch, np.mean(total_loss)))
+        if (epoch+1)%(num_epochs//10) == 0 and logs:
+            print("Epoch: {}, Loss: {}".format(epoch+1, np.mean(total_loss)))
 
+        epoch += 1
+        if epoch >= num_epochs-1:
+            # the los needs to be below 0
+            # not a very elegant solution, but needed
+            if loss < 0:
+                if logs:
+                    print("Epoch: {}, Loss: {}".format(epoch+1, np.mean(total_loss)))
+                break
     # created_labels = torch.stack(list(created_labels.values()))
     # created_label = torch.mean(created_labels, dim=0)
     
@@ -224,9 +268,9 @@ class FeatureMU_Loader(Dataset):
             label = self.label4noise if isinstance(self.label4noise, torch.Tensor) else self.label4noise[idx]
             return self.noise_gen(), label
         else:
-            return self.retain_data.__getitem__(idx - self.n)
+            return self.retain_data.__getitem__(idx - self.number_of_noise)
 
-def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise: torch.Tensor, retain_loader: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
+def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise: torch.Tensor, retain_data: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
     """
     The impairing phase of the MU algorithm inspired by https://github.com/vikram2000b/Fast-Machine-Unlearning
     In this phase, the model is trained with the data from the retain_loader and some noise generated by the noise_generator.
@@ -244,7 +288,7 @@ def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise
         torch.nn.Module: The model after the impairing phase.
     """
     noisy_loader = DataLoader(
-        dataset=FeatureMU_Loader(noise_generator, label4noise, number_of_noise, retain_loader),
+        dataset=FeatureMU_Loader(noise_generator, label4noise, number_of_noise, retain_data),
         batch_size=8, 
         shuffle=True
     )
@@ -254,10 +298,10 @@ def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise
     for epoch in range(1): # Hyperparameter  
         model.train(True)
         running_loss = 0.0
-        running_acc = 0
+        
         for i, data in enumerate(noisy_loader):
             inputs, labels = data
-            inputs, labels = inputs.cuda(), torch.tensor(labels).cuda()
+            inputs, labels = inputs.to(DEVICE), labels.clone().detach().to(DEVICE)
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -265,13 +309,11 @@ def impairing_phase(noise_generator: NoiseGen, number_of_noise: int, label4noise
             loss.backward()
             optimizer.step()
 
-            # print statistics
+            # Append the loss to the list of losses
             running_loss += loss.item() * inputs.size(0)
-            out = torch.argmax(outputs.detach(),dim=1)
-            assert out.shape==labels.shape
-            running_acc += (labels==out).sum().item()
+
         if logs:
-            print(f"Train loss {epoch+1}: {running_loss/len(noisy_loader)}, Train Acc:{running_acc*100/len(noisy_loader)}%")
+            print(f"Train loss {epoch+1}: {running_loss/len(noisy_loader)}")
 
     return model
 
@@ -294,10 +336,10 @@ def repairing_phase(retain_data: Dataset, model: torch.nn.Module, logs: bool = F
     for epoch in range(1): # Hyperparameter
         model.train(True)
         running_loss = 0.0
-        running_acc = 0
+        
         for i, data in enumerate(heal_loader):
             inputs, labels = data
-            inputs, labels = inputs.cuda(), torch.tensor(labels).cuda()
+            inputs, labels = inputs.to(DEVICE), labels.clone().detach().to(DEVICE)
 
             optimizer.zero_grad()
             outputs = model(inputs)
@@ -305,12 +347,13 @@ def repairing_phase(retain_data: Dataset, model: torch.nn.Module, logs: bool = F
             loss.backward()
             optimizer.step()
             
-            # print statistics
+            # Append the loss to the list of losses
             running_loss += loss.item() * inputs.size(0)
-            out = torch.argmax(outputs.detach(),dim=1)
-            assert out.shape==labels.shape
-            running_acc += (labels==out).sum().item()
-        print(f"Train loss {epoch+1}: {running_loss/len(retain_data)},Train Acc:{running_acc*100/len(retain_data)}%")
+
+        if logs:
+            print(f"Train loss {epoch+1}: {running_loss/len(heal_loader)}")
+
+    return model
 
 def _main(
         model: torch.nn.Module,
@@ -329,6 +372,7 @@ def _main(
         torch.nn.Module: The model after the unlearning process.
     """
     model.to(DEVICE)
+    start_time = datetime.datetime.now().timestamp()
 
     # Validation Dataloaders for the forget data
     forget_valid_dl = DataLoader(
@@ -359,13 +403,36 @@ def _main(
         test=False,
         dataset_name=dataset_name,
     )
+    
+    if logs:
+        print("Baseline Performance")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
 
+        print("______")
+        print("Performance of Baseline on Forget Class")
+        history = [evaluate(model, forget_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
+
+        print("Performance of Baseline Model on Retain Class")
+        history = [evaluate(model, retain_valid_dl)]
+        print("Accuracy: {}".format(history[0]["Acc"]*100))
+        print("Loss: {}".format(history[0]["Loss"]))
+
+        print("______")
+        print("Starting Noise Maximazation Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
+    
     # (Re)Training Dataloaders
     noise_gen, noise_labels = noise_maximization(
         forget_data=data_forget,
         model=model,
         logs=logs,
     )
+
+    if logs:
+        print("Ending Noise Maximazation Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
 
     # the retain train data
     retain_data = MNIST_CostumDataset(
@@ -378,6 +445,10 @@ def _main(
     
     # We need to make sure that the cls are balanced
     retain_data.length = len(data_forget) * len(retain_data.classes)
+    if logs:
+        print("______")
+        print("Starting Impairing Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
     
     impaired_model = impairing_phase(
         noise_generator=noise_gen,
@@ -389,17 +460,24 @@ def _main(
     )
 
     if logs:
-        print("Performance of Standard Forget Model on Forget Class")
+        print("Ending Impairing Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
+
+        print("______")
+        print("Performance of Impaired Model on Forget Class")
         history = [evaluate(impaired_model, forget_valid_dl)]
         print("Accuracy: {}".format(history[0]["Acc"]*100))
         print("Loss: {}".format(history[0]["Loss"]))
 
-        print("Performance of Standard Forget Model on Retain Class")
+        print("Performance of Impaired Model on Retain Class")
         history = [evaluate(impaired_model, retain_valid_dl)]
         print("Accuracy: {}".format(history[0]["Acc"]*100))
         print("Loss: {}".format(history[0]["Loss"]))
 
-
+        print("______")
+        print("Starting Repairing Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
+    
     repaired_model = repairing_phase(
         retain_data=retain_data,
         model=impaired_model,
@@ -407,14 +485,20 @@ def _main(
     )
 
     if logs:
-        print("Performance of Standard Forget Model on Forget Class")
+        print("Ending Repairing Phase")
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
+        print("______")
+
+        print("Performance of repaired Model on Forget Class")
         history = [evaluate(repaired_model, forget_valid_dl)]
         print("Accuracy: {}".format(history[0]["Acc"]*100))
         print("Loss: {}".format(history[0]["Loss"]))
 
-        print("Performance of Standard Forget Model on Retain Class")
+        print("Performance of Repaired Model on Retain Class")
         history = [evaluate(repaired_model, retain_valid_dl)]
         print("Accuracy: {}".format(history[0]["Acc"]*100))
         print("Loss: {}".format(history[0]["Loss"]))
+
+        print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
 
     return repaired_model

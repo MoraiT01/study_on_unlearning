@@ -88,7 +88,7 @@ class SimpleGradientAscent(Unlearner):
         return new_model
 
 
-class FastEffiecentUnlearning(Unlearner):
+class FastEffiecentFeatureUnlearning(Unlearner):
     """
     The Fast Machine Unlearning algorithm.
 
@@ -101,7 +101,7 @@ class FastEffiecentUnlearning(Unlearner):
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
             ) -> None:
         """
-        Initializes the FastEffiecentUnlearning algorithm.
+        Initializes the FastEffiecentFeatureUnlearning algorithm.
 
         Parameters:
             model (torch.nn.Module): The model to be unlearned.
@@ -111,11 +111,11 @@ class FastEffiecentUnlearning(Unlearner):
         self.dataset_name = dataset_name
 
     def __str__(self) -> str:
-        return "FastEffiecentUnlearning"
+        return "FastEffiecentFeatureUnlearning"
     
-    def unlearn(self) -> Module:
+    def unlearn(self, logs: bool = False) -> Module:
         """
-        Unlearns the model according to the FastEffiecentUnlearning algorithm.
+        Unlearns the model according to the FastEffiecentFeatureUnlearning algorithm.
 
         Returns:
             Module: The model after unlearning.
@@ -126,17 +126,17 @@ class FastEffiecentUnlearning(Unlearner):
         new_model = _main(
             model=new_model,
             dataset_name=self.dataset_name,
-            logs=False,
+            logs=logs,
             )
 
         return new_model
 
-def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
+def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
     """
     Returns a dictionary of Unlearners for all models in args["models"].
 
     Parameters:
-        name (Literal["SimpleGradientAscent", "FastEffiecentUnlearning"]): The name of the unlearning algorithm to use.
+        name (Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"]): The name of the unlearning algorithm to use.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to use.
         args (dict, optional): Additional arguments to pass to the Unlearner. Defaults to None.
 
@@ -146,8 +146,8 @@ def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentUnlearnin
     
     if name == "SimpleGradientAscent":
         return {k: SimpleGradientAscent(v, args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
-    elif name == "FastEffiecentUnlearning":
-        return {k: FastEffiecentUnlearning(v, args["u_data"], args["data"], dataset_name=dataset_name) for k, v in args["models"].items()}
+    elif name == "FastEffiecentFeatureUnlearning":
+        return {k: FastEffiecentFeatureUnlearning(v, args["u_data"], args["data"], dataset_name=dataset_name) for k, v in args["models"].items()}
     else:
         raise Exception(f"Unlearning algorithm '{name}' not supported.")
 
@@ -155,7 +155,7 @@ def unlearn_n_models(
         models: Dict[str, torch.nn.Module],
         unlearned_data: DataLoader,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
-        which_unlearning: Literal["SimpleGradientAscent", "FastEffiecentUnlearning"],
+        which_unlearning: Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"],
         data: DataLoader = None,
         logs: bool = True,
         ) -> Dict[str, torch.nn.Module]:
@@ -166,7 +166,7 @@ def unlearn_n_models(
         models (Dict[str, torch.nn.Module]): A dictionary of models to be unlearned, keyed by model name.
         unlearned_data (DataLoader): DataLoader containing the data to be unlearned from the models.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset the models were trained on.
-        which_unlearning (Literal["SimpleGradientAscent", "FastEffiecentUnlearning"]): The unlearning algorithm to use.
+        which_unlearning (Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"]): The unlearning algorithm to use.
         data (DataLoader, optional): Additional DataLoader for retained data, if needed by the unlearning algorithm.
         logs (bool, optional): Whether to print logs during the unlearning process. Defaults to True.
 

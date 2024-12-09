@@ -79,6 +79,8 @@ def boxplotting_multimodel_eval(
         models_dict: Dict[str, torch.nn.Module],
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
         evaluation: Literal["Accuracy", "Loss"] = "Accuracy",
+        train_split: bool = True,
+        test_split: bool = True,
         logs: bool = True) -> None:
     """This function evaluates one model type against the different dataset subsets"""
 
@@ -86,7 +88,7 @@ def boxplotting_multimodel_eval(
         raise Exception(f"Dataset '{dataset_name}' not supported.")
     
     # Get the subsets
-    d_gesamt, d_remain, d_classes = get_dataset_subsetloaders(dataset_name=dataset_name)
+    d_gesamt, d_remain, d_classes = get_dataset_subsetloaders(dataset_name=dataset_name, train_split=train_split, test_split=test_split)
     subsets = {"D_gesamt": d_gesamt, "D_remain": d_remain,}
     subsets.update({cls: loaders for cls, loaders in d_classes.items()})
     
@@ -111,6 +113,6 @@ def boxplotting_multimodel_eval(
         print("plotting...")
 
     # Create the boxplots
-    create_boxplots(metrics, title=f"{evaluation} Scores for Different Subsets of {dataset_name}", evaluation=evaluation)
+    create_boxplots(metrics, title=f"{evaluation} Scores for Different Subsets of {dataset_name} (Train_Data={train_split}, Test_Data={test_split})", evaluation=evaluation)
 
     return metrics
