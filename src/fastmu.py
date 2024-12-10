@@ -188,18 +188,18 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
     model.to(DEVICE)
     model.eval()
     optimizers = torch.optim.Adam(noise_generator.parameters(), lr = 0.02) # Hyperparameter
-    num_epochs = 20 # Hyperparameter
+    num_epochs = 5 # Hyperparameter
     # Optional learning rate scheduler
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/3), gamma=0.1)
-
+    
     epoch = 0
     while True:
         total_loss = []
-
+        epoch += 1
         for input_batch, l in noise_loader:
 
             outputs = model(input_batch)
-            loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch)))
+            loss = - F.cross_entropy(outputs, l) + 0.01 * torch.mean(torch.sum(torch.square(input_batch)))
             optimizers.zero_grad()
             loss.backward()
             optimizers.step()
@@ -208,17 +208,19 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
             total_loss.append(loss.cpu().detach().numpy())
 
         # scheduler.step()
-        if (epoch+1)%(num_epochs//10) == 0 and logs:
-            print("Epoch: {}, Loss: {}".format(epoch+1, np.mean(total_loss)))
+        if logs:
+            print("Epoch: {}, Loss: {}".format(epoch, np.mean(total_loss)))
 
-        epoch += 1
-        if epoch >= num_epochs-1:
+        if epoch >= num_epochs:
             # the los needs to be below 0
             # not a very elegant solution, but needed
             if loss < 0:
-                if logs:
-                    print("Epoch: {}, Loss: {}".format(epoch+1, np.mean(total_loss)))
                 break
+            else:
+                # give it a few more epochs to train
+                # this is meant to be a sort of failsave
+                num_epochs += 1
+        
     # created_labels = torch.stack(list(created_labels.values()))
     # created_label = torch.mean(created_labels, dim=0)
     
@@ -444,7 +446,7 @@ def _main(
         )
     
     # We need to make sure that the cls are balanced
-    retain_data.length = len(data_forget) * len(retain_data.classes)
+    retain_data.length = len(data_forget) if len(data_forget) < len(retain_data) else len(retain_data)
     if logs:
         print("______")
         print("Starting Impairing Phase")
