@@ -122,11 +122,14 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
     model1.eval()
     model2.eval()
     
-    kl_divergence_list = []
-    num_samples = 0
+    # Cumulative Average KL Divergence
+    kl_divergence_ca = 0
+    n = 0
+    very_small_number = 1e-6
     
     with torch.no_grad():
         for inputs, labels in data_loader:
+            n += 1
             inputs = inputs.to(device)
             labels = labels.to(device)
             
@@ -138,15 +141,19 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
             # Ensure probs are probabilities (apply softmax if needed)
             probs1 = F.softmax(probs1, dim=1)
             probs2 = F.softmax(probs2, dim=1)
+
+            # Add a small number to avoid log(0) errors
+            probs1 = probs1 + very_small_number
+            probs2 = probs2 + very_small_number
             
             # Calculate the KL divergence for each sample and sum up
-            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean')
-
-            kl_divergence_list.append(kl_divergence.item() * inputs.size(0))
-            num_samples += inputs.size(0)
+            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item() * inputs.size(0)
+            
+            # Update cumulative average
+            kl_divergence_ca += kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
     
     # Return average KL divergence over all samples
-    return sum([x/num_samples for x in kl_divergence_list])
+    return kl_divergence_ca
 
 def calc_singlemodel_metric(model: torch.nn.Module, testing_loader: torch.nn.Module, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
     """

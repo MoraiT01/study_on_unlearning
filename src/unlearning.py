@@ -10,7 +10,7 @@ from copy import deepcopy
 from tqdm import tqdm
 
 from training import model_params
-from fastmu import _main
+from gefeu import _main
 
 from abc import ABC, abstractmethod
 # Set device (use GPU if available)
@@ -145,9 +145,9 @@ def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentFeatureUn
     """
     
     if name == "SimpleGradientAscent":
-        return {k: SimpleGradientAscent(v, args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
+        return {k: SimpleGradientAscent(model=v, unlearned_data=args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
     elif name == "FastEffiecentFeatureUnlearning":
-        return {k: FastEffiecentFeatureUnlearning(v, args["u_data"], args["data"], dataset_name=dataset_name) for k, v in args["models"].items()}
+        return {k: FastEffiecentFeatureUnlearning(model=v, dataset_name=dataset_name) for k, v in args["models"].items()}
     else:
         raise Exception(f"Unlearning algorithm '{name}' not supported.")
 
