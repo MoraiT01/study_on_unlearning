@@ -179,7 +179,7 @@ class GeneratorFeatureUnlearning(Unlearner):
 
         return new_model
 
-def get_unlearners(name: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
+def get_unlearners(name: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning", "GeneratorMachineUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
     """
     Returns a dictionary of Unlearners for all models in args["models"].
 
@@ -196,6 +196,8 @@ def get_unlearners(name: Literal["SimpleGradientAscent", "GeneratorFeatureUnlear
         return {k: SimpleGradientAscent(model=v, unlearned_data=args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
     elif name == "GeneratorFeatureUnlearning":
         return {k: GeneratorFeatureUnlearning(model=v, dataset_name=dataset_name) for k, v in args["models"].items()}
+    elif name == "GeneratorMachineUnlearning":
+        return {k: GeneratorMachineUnlearning(model=v, dataset_name=dataset_name) for k, v in args["models"].items()}
     else:
         raise Exception(f"Unlearning algorithm '{name}' not supported.")
 
@@ -203,7 +205,7 @@ def unlearn_n_models(
         models: Dict[str, torch.nn.Module],
         unlearned_data: DataLoader,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
-        which_unlearning: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"],
+        which_unlearning: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning", "GeneratorMachineUnlearning"],
         data: DataLoader = None,
         logs: bool = True,
         ) -> Dict[str, torch.nn.Module]:
@@ -214,7 +216,7 @@ def unlearn_n_models(
         models (Dict[str, torch.nn.Module]): A dictionary of models to be unlearned, keyed by model name.
         unlearned_data (DataLoader): DataLoader containing the data to be unlearned from the models.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset the models were trained on.
-        which_unlearning (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"]): The unlearning algorithm to use.
+        which_unlearning (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning", "GeneratorMachineUnlearning"]): The unlearning algorithm to use.
         data (DataLoader, optional): Additional DataLoader for retained data, if needed by the unlearning algorithm.
         logs (bool, optional): Whether to print logs during the unlearning process. Defaults to True.
 

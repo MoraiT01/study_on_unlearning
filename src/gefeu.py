@@ -191,7 +191,8 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
     num_epochs = 5 # Hyperparameter
     # Optional learning rate scheduler
     # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/3), gamma=0.1)
-    
+    d = [1] if forget_data.dataset_name in ["mnist", "fashion_mnist"]  else [1,2,3]
+
     epoch = 0
     while True:
         total_loss = []
@@ -199,7 +200,7 @@ def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool 
         for input_batch, l in noise_loader:
 
             outputs = model(input_batch)
-            loss = - F.cross_entropy(outputs, l) + 0.01 * torch.mean(torch.sum(torch.square(input_batch), [1]))
+            loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch), d))
             optimizers.zero_grad()
             loss.backward()
             optimizers.step()

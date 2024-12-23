@@ -53,18 +53,59 @@ def evaluate(model, val_loader):
     outputs = [validation_step(model, batch) for batch in val_loader]
     return validation_epoch_end(model, outputs)
 
-# defining the noise structure
-class Noise(nn.Module):
-    def __init__(self, *dim):
-        super().__init__()
-        self.noise = torch.nn.Parameter(torch.randn(*dim), requires_grad = True)
-        
-    def forward(self):
-        return self.noise
-
-def prep_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[Noise, Dict, Dict]:
+class NoiseGen(nn.Module):
+    """
+    A neural network module for generating noise with a specified dimension.
     """
 
+    def __init__(self, dim):
+        """
+        Initializes the NoiseGen module.
+
+        Args:
+            dim (tuple): The dimensions of the output noise.
+        """
+        super().__init__()
+        self.dim = dim
+        self.start_dims = 100  # Initial dimension of random noise
+
+        # Define fully connected layers
+        self.f1 = nn.Linear(self.start_dims, 1000)
+        self.f2 = nn.Linear(1000, math.prod(self.dim))
+
+    def forward(self):
+        """
+        Performs a forward pass to generate noise.
+
+        Returns:
+            torch.Tensor: A tensor reshaped to the specified dimensions.
+        """
+        # Generate random starting noise
+        x = torch.randn(self.start_dims)
+        x = x.flatten()
+
+        # Transform noise into learnable patterns
+        x = self.f1(x)
+        x = torch.relu(x)
+        x = self.f2(x)
+
+        # Reshape tensor to the specified dimensions
+        reshaped_tensor = x.view(self.dim)
+        return reshaped_tensor
+
+def prep_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, Dict, Dict]:
+    """
+    Creates a noise generator to generate noise which mimics the data in forget_data.
+
+    Args:
+        forget_data (Dataset): The dataset which contains the data to be forgotten.
+        model (torch.nn.Module): The model which was used to generate the labels.
+
+    Returns:
+        Tuple[NoiseGen, Dict, Dict]:
+            - The trained NoiseGen model.
+            - A dictionary which contains the original labels.
+            - A dictionary which contains the new labels.
     """
     
     noises = {}
@@ -83,47 +124,145 @@ def prep_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[
         # Der prognostizierte Wahrkeitsvektor ist eine andere Darstellung des Samples,
         # Wir wollen nicht die Klasse unlearnen, sonder das Sample/das Feature
 
-    batch_size = [NOISE_BATCH_SIZE]
-    batch_size.extend(s[0].shape)
-    noises = Noise(batch_size).to(DEVICE)
+    noises = NoiseGen(s[0].shape).to(DEVICE)
 
     return noises, created_labels, og_labels
 
-def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> Tuple[Noise, Dict[int, torch.Tensor] | torch.Tensor]:
+def prep_noise_generator(forget_data: Dataset, model: torch.nn.Module) -> Tuple[NoiseGen, Dict, Dict]:
     """
+    Creates a noise generator to generate noise which mimics the data in forget_data.
 
+    Args:
+        forget_data (Dataset): The dataset which contains the data to be forgotten.
+        model (torch.nn.Module): The model which was used to generate the labels.
+
+    Returns:
+        Tuple[NoiseGen, Dict, Dict]:
+            - The trained NoiseGen model.
+            - A dictionary which contains the original labels.
+            - A dictionary which contains the new labels.
     """
-    noise_batch, _, og_labels = prep_noise_generator(forget_data, model)
-    # Should be cls label 7 for all of them
-    # Unnecessary, I guess but also works
-    cls_labels = torch.stack(list(og_labels.values()))
-    cls_mean = torch.mean(cls_labels, dim=0)
-    cls_index = torch.argmax(cls_mean)
-    cls_label = torch.zeros_like(cls_mean)
-    cls_label[cls_index] = 1
-
-    label_batch = torch.stack([cls_label for _ in range(NOISE_BATCH_SIZE)]).to(DEVICE)
-
-    opt = torch.optim.Adam(noise_batch.parameters(), lr = 0.1)
-
-    num_epochs = 5
-    num_steps = 8
-
-    for epoch in range(num_epochs):
-        total_loss = []
-        for batch in range(num_steps):
-            inputs = noise_batch()
-            
-            outputs = model(inputs)
-            loss = -F.cross_entropy(outputs, label_batch) + 0.1*torch.mean(torch.sum(torch.square(inputs), [1]))
-            opt.zero_grad()
-            loss.backward()
-            opt.step()
-            total_loss.append(loss.cpu().detach().numpy())
-        if logs:
-            print("Loss: {}".format(np.mean(total_loss)))
     
-    return noise_batch, cls_label
+    noises = {}
+    og_labels = {}
+    created_labels =  {}
+    model.eval()
+    for index, data in enumerate(DataLoader(forget_data, batch_size=1, shuffle=False)): # iterate over forget_data):
+        s, l = data
+
+        new_l = F.softmax(model(s.to(DEVICE)).detach(), dim=1)
+        
+        created_labels[index] = new_l[0].to(DEVICE)
+        og_labels[index] = l[0].to(DEVICE)
+        # Ursprünglich waren hier die Labels der der Klassen gemeint
+        # Jedoch entschied ich mich dagegen
+        # Der prognostizierte Wahrkeitsvektor ist eine andere Darstellung des Samples,
+        # Wir wollen nicht die Klasse unlearnen, sonder das Sample/das Feature
+
+    noises = NoiseGen(s[0].shape).to(DEVICE)
+
+    return noises, created_labels, og_labels
+
+class NoiseDataset(Dataset):
+    """
+    A DataLoader which uses a noise generator to generate data and labels.
+
+    Args:
+        noise_generator (NoiseGen): The noise generator to use.
+        noise_labels (Dict[int, torch.Tensor] | torch.Tensor): The labels to use. If a tensor, it is used as the labels for all samples. If a dict, it is used as a mapping of indices to labels.
+        number_of_noise (int, optional): The number of noise samples to generate. Defaults to 100.
+    """
+
+    def __init__(self, noise_generator: NoiseGen, noise_labels: Dict[int, torch.Tensor] | torch.Tensor, number_of_noise: int = 100,):
+
+        self.noise_generator = noise_generator
+        self.noise_labels  = noise_labels
+        self.number_of_noise = number_of_noise if isinstance(self.noise_labels, torch.Tensor) else len(self.noise_labels)
+
+    def __len__(self) -> int:
+        """
+        The number of samples in the dataset.
+
+        Returns:
+            int: The number of samples in the dataset.
+        """
+        return self.number_of_noise
+    
+    def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
+        """
+        Returns a sample from the dataset.
+
+        Args:
+            idx (int): The index of the sample.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing the sample and the label.
+        """
+        return self.noise_generator(), self.noise_labels if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
+
+def noise_maximization(forget_data: Dataset, model: torch.nn.Module, logs: bool = False) -> Tuple[NoiseGen, Dict[int, torch.Tensor] | torch.Tensor]:
+    """
+    This function trains a noise generator to maximize the output of a model on given labels.
+
+    Args:
+        forget_data (Dataset): The dataset which contains the data to be forgotten.
+        model (torch.nn.Module): The model which was used to generate the labels.
+        logs (bool): Whether to print logs.
+
+    Returns:
+        Tuple[NoiseGen, torch.Tensor]:
+            - The trained NoiseGen model.
+            - The mean of the labels which were used to train the noise generator.
+    """
+    noise_generator, _, og_labels = prep_noise_generator(forget_data, model)
+    noise_loader = DataLoader(
+        dataset=NoiseDataset(noise_generator, og_labels),
+        batch_size=32, # Hyperparameter
+        shuffle=True,
+    )
+
+    model.to(DEVICE)
+    model.eval()
+    optimizers = torch.optim.Adam(noise_generator.parameters(), lr = 0.02) # Hyperparameter
+    num_epochs = 5 # Hyperparameter
+    # Optional learning rate scheduler
+    # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/3), gamma=0.1)
+    d = [1] if forget_data.dataset_name in ["mnist", "fashion_mnist"]  else [1,2,3]
+
+    epoch = 0
+    while True:
+        total_loss = []
+        epoch += 1
+        for input_batch, l in noise_loader:
+
+            outputs = model(input_batch)
+            loss = - F.cross_entropy(outputs, l) + 0.1 * torch.mean(torch.sum(torch.square(input_batch), d))
+            optimizers.zero_grad()
+            loss.backward()
+            optimizers.step()
+
+            # for logging
+            total_loss.append(loss.cpu().detach().numpy())
+
+        # scheduler.step()
+        if logs:
+            print("Epoch: {}, Loss: {}".format(epoch, np.mean(total_loss)))
+
+        if epoch >= num_epochs:
+            # the los needs to be below 0
+            # not a very elegant solution, but needed
+            if loss < 0:
+                break
+            else:
+                # give it a few more epochs to train
+                # this is meant to be a sort of failsave
+                num_epochs += 1
+        
+    # created_labels = torch.stack(list(created_labels.values()))
+    # created_label = torch.mean(created_labels, dim=0)
+    
+    return noise_generator, og_labels
+
 
 class FeatureMU_Loader(Dataset):
     """
@@ -131,7 +270,7 @@ class FeatureMU_Loader(Dataset):
     The noise is generated with the label4noise and added to the dataset as many times as specified in number_of_noise.
     """
 
-    def __init__(self, noise_generator: Noise, label4noise: Dict[int, torch.Tensor] | torch.Tensor, number_of_noise: int, retain_data: Dataset):
+    def __init__(self, noise_generator: NoiseGen, label4noise: Dict[int, torch.Tensor] | torch.Tensor, number_of_noise: int, retain_data: Dataset):
         """
 
         """
@@ -158,7 +297,7 @@ class FeatureMU_Loader(Dataset):
         else:
             return self.retain_data.__getitem__(idx - self.number_of_noise)
 
-def impairing_phase(noise_batch: Noise, number_of_noise: int, label4noise: torch.Tensor, retain_data: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
+def impairing_phase(noise_batch: NoiseGen, number_of_noise: int, label4noise: torch.Tensor, retain_data: Dataset, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
     """
 
     """
@@ -294,10 +433,10 @@ def _main(
         print("Loss: {}".format(history[0]["Loss"]))
 
         print("______")
-        print("Starting Noise Maximazation Phase")
+        print("Starting NoiseGen Maximazation Phase")
         print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
     
-    # (Re)Training Dataloaders
+#   # Get the Noise
     noise_gen, noise_labels = noise_maximization(
         forget_data=data_forget,
         model=model,
@@ -305,7 +444,7 @@ def _main(
     )
 
     if logs:
-        print("Ending Noise Maximazation Phase")
+        print("Ending NoiseGen Maximazation Phase")
         print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
 
     # the retain train data
