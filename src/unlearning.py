@@ -10,7 +10,8 @@ from copy import deepcopy
 from tqdm import tqdm
 
 from training import model_params
-from gefeu import _main
+import gefeu
+import gemu
 
 from abc import ABC, abstractmethod
 # Set device (use GPU if available)
@@ -87,12 +88,13 @@ class SimpleGradientAscent(Unlearner):
 
         return new_model
 
-
-class FastEffiecentFeatureUnlearning(Unlearner):
+class GeneratorMachineUnlearning(Unlearner):
     """
-    The Fast Machine Unlearning algorithm.
-
     This algorithm is inspired by the paper "Fast Machine Unlearning" by Vikram et al.
+    My Goal: The task is to unlearn a subset of a class, not the whole class. The subset should be tide together be one shared feature.
+    Core Difference: 
+        - Instead of a noise batch we use a noise Generator
+        - D_Retain and D_forget are change to fit the new task 
     """
 
     def __init__(
@@ -101,7 +103,7 @@ class FastEffiecentFeatureUnlearning(Unlearner):
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
             ) -> None:
         """
-        Initializes the FastEffiecentFeatureUnlearning algorithm.
+        Initializes the GeneratorFeatureUnlearning algorithm.
 
         Parameters:
             model (torch.nn.Module): The model to be unlearned.
@@ -111,11 +113,11 @@ class FastEffiecentFeatureUnlearning(Unlearner):
         self.dataset_name = dataset_name
 
     def __str__(self) -> str:
-        return "FastEffiecentFeatureUnlearning"
+        return "GeneratorFeatureUnlearning"
     
     def unlearn(self, logs: bool = False) -> Module:
         """
-        Unlearns the model according to the FastEffiecentFeatureUnlearning algorithm.
+        Unlearns the model according to the GeneratorFeatureUnlearning algorithm.
 
         Returns:
             Module: The model after unlearning.
@@ -123,7 +125,7 @@ class FastEffiecentFeatureUnlearning(Unlearner):
         new_model = deepcopy(self.model)
         new_model.to(DEVICE)
 
-        new_model = _main(
+        new_model = gemu._main(
             model=new_model,
             dataset_name=self.dataset_name,
             logs=logs,
@@ -131,12 +133,58 @@ class FastEffiecentFeatureUnlearning(Unlearner):
 
         return new_model
 
-def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
+class GeneratorFeatureUnlearning(Unlearner):
+    """
+    This algorithm is inspired by the paper "Fast Machine Unlearning" by Vikram et al.
+    My Goal: The task is to unlearn a subset of a class, not the whole class. The subset should be tide together be one shared feature.
+    Core Difference: 
+        - Instead of a noise batch we use a noise Generator
+        - D_Retain and D_forget are change to fit the new task
+        - Noise Generator is trained to maximize the Prior Probabilities predicted by the model, instead of the class label.
+    """
+
+    def __init__(
+            self,
+            model: torch.nn.Module,
+            dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
+            ) -> None:
+        """
+        Initializes the GeneratorFeatureUnlearning algorithm.
+
+        Parameters:
+            model (torch.nn.Module): The model to be unlearned.
+            dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset.
+        """
+        self.model = model
+        self.dataset_name = dataset_name
+
+    def __str__(self) -> str:
+        return "GeneratorFeatureUnlearning"
+    
+    def unlearn(self, logs: bool = False) -> Module:
+        """
+        Unlearns the model according to the GeneratorFeatureUnlearning algorithm.
+
+        Returns:
+            Module: The model after unlearning.
+        """
+        new_model = deepcopy(self.model)
+        new_model.to(DEVICE)
+
+        new_model = gefeu._main(
+            model=new_model,
+            dataset_name=self.dataset_name,
+            logs=logs,
+            )
+
+        return new_model
+
+def get_unlearners(name: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"], dataset_name: Literal["mnist", "cmnist", "fashion_mnist"], args: dict = None) -> Dict[str, Unlearner]:
     """
     Returns a dictionary of Unlearners for all models in args["models"].
 
     Parameters:
-        name (Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"]): The name of the unlearning algorithm to use.
+        name (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"]): The name of the unlearning algorithm to use.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to use.
         args (dict, optional): Additional arguments to pass to the Unlearner. Defaults to None.
 
@@ -146,8 +194,8 @@ def get_unlearners(name: Literal["SimpleGradientAscent", "FastEffiecentFeatureUn
     
     if name == "SimpleGradientAscent":
         return {k: SimpleGradientAscent(model=v, unlearned_data=args["u_data"], dataset_name=dataset_name) for k, v in args["models"].items()}
-    elif name == "FastEffiecentFeatureUnlearning":
-        return {k: FastEffiecentFeatureUnlearning(model=v, dataset_name=dataset_name) for k, v in args["models"].items()}
+    elif name == "GeneratorFeatureUnlearning":
+        return {k: GeneratorFeatureUnlearning(model=v, dataset_name=dataset_name) for k, v in args["models"].items()}
     else:
         raise Exception(f"Unlearning algorithm '{name}' not supported.")
 
@@ -155,7 +203,7 @@ def unlearn_n_models(
         models: Dict[str, torch.nn.Module],
         unlearned_data: DataLoader,
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
-        which_unlearning: Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"],
+        which_unlearning: Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"],
         data: DataLoader = None,
         logs: bool = True,
         ) -> Dict[str, torch.nn.Module]:
@@ -166,7 +214,7 @@ def unlearn_n_models(
         models (Dict[str, torch.nn.Module]): A dictionary of models to be unlearned, keyed by model name.
         unlearned_data (DataLoader): DataLoader containing the data to be unlearned from the models.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset the models were trained on.
-        which_unlearning (Literal["SimpleGradientAscent", "FastEffiecentFeatureUnlearning"]): The unlearning algorithm to use.
+        which_unlearning (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"]): The unlearning algorithm to use.
         data (DataLoader, optional): Additional DataLoader for retained data, if needed by the unlearning algorithm.
         logs (bool, optional): Whether to print logs during the unlearning process. Defaults to True.
 
