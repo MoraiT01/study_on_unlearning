@@ -128,7 +128,7 @@ class MNIST_CostumDataset(Dataset):
             download: bool=False,
             ):
         """
-            Constructor for the MNIST_CostumDataset class.
+            Constructor for the MNIST_CustomDataset class.
 
             Parameters:
                 root_dir (str): The root directory of the dataset.

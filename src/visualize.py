@@ -11,10 +11,6 @@ import numpy as np
 from helper import get_dataset_subsetloaders
 from metrics import calc_singlemodel_metric, calc_multimodel_metric
 
-
-    # TODO
-    # Test if it works for your case
-    # This function was writen by GPT, needs to be tested
 def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     """
     Visualizes the change in weights via a heatmap.
