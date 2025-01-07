@@ -138,19 +138,21 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
             probs1 = model1(inputs)
             probs2 = model2(inputs)
 
-            # Ensure probs are probabilities (apply softmax if needed)
-            probs1 = F.softmax(probs1, dim=1)
-            probs2 = F.softmax(probs2, dim=1)
-
             # Add a small number to avoid log(0) errors
             probs1 = probs1 + very_small_number
             probs2 = probs2 + very_small_number
+
+            # Ensure probs are probabilities (apply softmax if needed)
+            probs1 = F.softmax(probs1, dim=1)
+            probs2 = F.softmax(probs2, dim=1)
             
             # Calculate the KL divergence for each sample and sum up
             kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item() * inputs.size(0)
+
+            kl_divergence = round(kl_divergence, 4) # I had problems with very small numbers accumulating to scuw the result
             
             # Update cumulative average
-            kl_divergence_ca += kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
+            kl_divergence_ca = kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
     
     # Return average KL divergence over all samples
     return kl_divergence_ca

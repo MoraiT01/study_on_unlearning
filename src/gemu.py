@@ -398,6 +398,7 @@ def _main(
         t_Impair_LR: float = 0.02,
         t_Repair_LR: float = 0.01,
         logs: bool = False,
+        model_eval_logs: bool = False,
     ) -> torch.nn.Module:
     """
     Main function for the Fast Machine Unlearning inspired algorithm.
@@ -446,7 +447,7 @@ def _main(
     if logs:
         print("Baseline Performance")
         print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
-
+    if model_eval_logs:
         print("______")
         print("Performance of Baseline on Forget Class")
         history = [evaluate(model, forget_valid_dl)]
@@ -510,7 +511,7 @@ def _main(
     if logs:
         print("Ending Impairing Phase")
         print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
-
+    if model_eval_logs:
         print("______")
         print("Performance of Impaired Model on Forget Class")
         history = [evaluate(impaired_model, forget_valid_dl)]
@@ -537,7 +538,7 @@ def _main(
         print("Ending Repairing Phase")
         print("Time: {}".format(datetime.datetime.now().timestamp() - start_time))
         print("______")
-
+    if model_eval_logs:
         print("Performance of repaired Model on Forget Class")
         history = [evaluate(repaired_model, forget_valid_dl)]
         print("Accuracy: {}".format(history[0]["Acc"]*100))
