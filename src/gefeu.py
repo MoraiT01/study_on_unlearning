@@ -75,17 +75,17 @@ class NoiseGenerator(nn.Module):
         super().__init__()
         self.dim = dim_out
         self.start_dims = dim_start  # Initial dimension of random noise
-
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         # Define fully connected layers
         self.layers = {}
-        self.layers["l1"] = nn.Linear(self.start_dims, dim_hidden[0])
+        self.layers["l1"] = nn.Linear(self.start_dims, dim_hidden[0]).to(self.device)
         last = dim_hidden[0]
         for idx in range(len(dim_hidden)-1):
-            self.layers[f"l{idx+2}"] = nn.Linear(dim_hidden[idx], dim_hidden[idx+1])
+            self.layers[f"l{idx+2}"] = nn.Linear(dim_hidden[idx], dim_hidden[idx+1]).to(self.device)
             last = dim_hidden[idx+1]
 
         # Define output layer
-        self.f_out = nn.Linear(last, math.prod(self.dim))        
+        self.f_out = nn.Linear(last, math.prod(self.dim)).to(self.device)   
 
     def forward(self):
         """
@@ -95,7 +95,7 @@ class NoiseGenerator(nn.Module):
         torch.Tensor: The reshaped tensor with specified output dimensions.
         """
         # Generate random starting noise
-        x = torch.randn(self.start_dims)
+        x = torch.randn(self.start_dims).to(self.device)
         x = x.flatten()
 
         # Transform noise into learnable patterns
@@ -151,7 +151,7 @@ def prep_noise_generator(
         og_labels[index] = l[0].to(DEVICE)
 
     # Create a NoiseGenerator with the specified dimensions
-    noises = NoiseGenerator(s[0].shape, Layers = t_Layers, Noise_Dim = t_Noise_Dim).to(DEVICE)
+    noises = NoiseGenerator(dim_out=s[0].shape, dim_hidden=t_Layers, dim_start= t_Noise_Dim).to(DEVICE)
 
     # Return the NoiseGenerator and the two dictionaries
     return noises, created_labels, og_labels
@@ -191,7 +191,7 @@ class NoiseDataset(Dataset):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: A tuple containing the sample and the label.
         """
-        return self.noise_generator(), self.noise_labels if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
+        return self.noise_generator().to(DEVICE), self.noise_labels.to(DEVICE) if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
 
 def noise_maximization(
         forget_data: Dataset,
@@ -324,9 +324,10 @@ class FeatureMU_Loader(Dataset):
         """
         if idx < self.number_of_noise:
             label = self.label4noise if isinstance(self.label4noise, torch.Tensor) else self.label4noise[idx]
-            return self.noise_gen(), label
+            return self.noise_gen().to(DEVICE), label.to(DEVICE)
         else:
-            return self.retain_data.__getitem__(idx - self.number_of_noise)
+            s, l = self.retain_data.__getitem__(idx - self.number_of_noise)
+            return s.to(DEVICE), l.to(DEVICE)
 
 def impairing_phase(noise_generator: NoiseGenerator, number_of_noise: int, label4noise: torch.Tensor, retain_data: Dataset, model: torch.nn.Module, t_Impair_LR: float, logs: bool = False) -> torch.nn.Module:
     """
@@ -518,7 +519,7 @@ def _main(
         )
     
     # We need to make sure that the cls are balanced
-    retain_data.length = len(data_forget) * t_N2R_Ratio
+    retain_data.length = int(len(data_forget) * t_N2R_Ratio)
     if logs:
         print("______")
         print("Starting Impairing Phase")

@@ -296,9 +296,10 @@ class FeatureMU_Loader(Dataset):
         """
         if idx < self.number_of_noise:
             label = self.label4noise if isinstance(self.label4noise, torch.Tensor) else self.label4noise[idx]
-            return self.noise_gen()[idx], label
+            return self.noise_gen()[idx].to(DEVICE), label.to(DEVICE)
         else:
-            return self.retain_data.__getitem__(idx - self.number_of_noise)
+            s, l = self.retain_data.__getitem__(idx - self.number_of_noise)
+            return s.to(DEVICE), l.to(DEVICE)
 
 def impairing_phase(noise_batch: NoiseGenerator, number_of_noise: int, label4noise: torch.Tensor, retain_data: Dataset, t_Impair_LR: float, model: torch.nn.Module, logs: bool = False) -> torch.nn.Module:
     """
@@ -325,7 +326,7 @@ def impairing_phase(noise_batch: NoiseGenerator, number_of_noise: int, label4noi
     )
     optimizer = torch.optim.Adam(model.parameters(), lr = t_Impair_LR) # Hyperparameter
 
-    for epoch in range(1): # Hyperparameter  
+    for epoch in range(1): # Hyperparameter?
         model.train(True)
         running_loss = 0.0
         
@@ -363,7 +364,7 @@ def repairing_phase(retain_data: Dataset, model: torch.nn.Module, t_Repair_LR: f
 
     optimizer = torch.optim.Adam(model.parameters(), lr = t_Repair_LR) # Hyperparameter
 
-    for epoch in range(1): # Hyperparameter
+    for epoch in range(1): # Hyperparameter?
         model.train(True)
         running_loss = 0.0
         
