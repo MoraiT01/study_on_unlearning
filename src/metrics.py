@@ -128,7 +128,7 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
     very_small_number = 1e-6
     
     with torch.no_grad():
-        for inputs, labels in data_loader:
+        for inputs, labels in tqdm(data_loader, desc=f"KL Divergence", unit="batch", leave=False):
             n += 1
             inputs = inputs.to(device)
             labels = labels.to(device)
@@ -147,7 +147,7 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
             probs2 = F.softmax(probs2, dim=1)
             
             # Calculate the KL divergence for each sample and sum up
-            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item() * inputs.size(0)
+            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item()
 
             kl_divergence = round(kl_divergence, 4) # I had problems with very small numbers accumulating to scuw the result
             
