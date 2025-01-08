@@ -75,17 +75,17 @@ class NoiseGenerator(nn.Module):
         super().__init__()
         self.dim = dim_out
         self.start_dims = dim_start  # Initial dimension of random noise
-
+        self.device = "cuda:0" if torch.cuda.is_available() else "cpu"
         # Define fully connected layers
         self.layers = {}
-        self.layers["l1"] = nn.Linear(self.start_dims, dim_hidden[0])
+        self.layers["l1"] = nn.Linear(self.start_dims, dim_hidden[0]).to(self.device)
         last = dim_hidden[0]
         for idx in range(len(dim_hidden)-1):
-            self.layers[f"l{idx+2}"] = nn.Linear(dim_hidden[idx], dim_hidden[idx+1])
+            self.layers[f"l{idx+2}"] = nn.Linear(dim_hidden[idx], dim_hidden[idx+1]).to(self.device)
             last = dim_hidden[idx+1]
 
         # Define output layer
-        self.f_out = nn.Linear(last, math.prod(self.dim))        
+        self.f_out = nn.Linear(last, math.prod(self.dim)).to(self.device)        
 
     def forward(self):
         """
@@ -95,7 +95,7 @@ class NoiseGenerator(nn.Module):
         torch.Tensor: The reshaped tensor with specified output dimensions.
         """
         # Generate random starting noise
-        x = torch.randn(self.start_dims)
+        x = torch.randn(self.start_dims).to(self.device)
         x = x.flatten()
 
         # Transform noise into learnable patterns
@@ -191,7 +191,7 @@ class NoiseDataset(Dataset):
         Returns:
             Tuple[torch.Tensor, torch.Tensor]: A tuple containing the sample and the label.
         """
-        return self.noise_generator(), self.noise_labels if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
+        return self.noise_generator().to(DEVICE), self.noise_labels.to(DEVICE) if isinstance(self.noise_labels, torch.Tensor) else self.noise_labels[idx]
 
 def noise_maximization(
         forget_data: Dataset,
@@ -493,7 +493,7 @@ def _main(
     # We need to make sure that the cls are balanced
     # take the same amout like in the paper of femu
     # 1000 samples per other class
-    retain_data.length = len(data_forget) * t_N2R_Ratio # every except the one we want to forget from
+    retain_data.length = int(len(data_forget) * t_N2R_Ratio) # every except the one we want to forget from
     if logs:
         print("______")
         print("Starting Impairing Phase")
