@@ -21,7 +21,7 @@ import math
 import datetime
 from tqdm import tqdm
 
-torch.manual_seed(100)
+# torch.manual_seed(100)
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -139,7 +139,6 @@ def prep_noise_generator(
 
     # Iterate over the forget_data and create the created labels
     for index, data in enumerate(DataLoader(forget_data, batch_size=1, shuffle=False)):
-
         # Get the sample and the label
         s, l = data
 
@@ -237,10 +236,8 @@ def noise_maximization(
     model.eval()
     optimizers = torch.optim.Adam(noise_generator.parameters(), lr = t_Learning_Rate) # Hyperparameter
     num_epochs = t_Epochs # Hyperparameter
-    # Optional learning rate scheduler
-    # scheduler = torch.optim.lr_scheduler.StepLR(optimizers, step_size=int(num_epochs/3), gamma=0.1)
-    d = [1] if forget_data.dataset_name in ["mnist", "fashion_mnist"]  else [1,2,3]
 
+    d = [1] if forget_data.dataset_name in ["mnist", "fashion_mnist"]  else [1,2,3]
     epoch = 0
     while True:
         total_loss = []
@@ -275,29 +272,56 @@ class FeatureMU_Loader(Dataset):
 
     def __init__(self, noise_generator: NoiseGenerator, label4noise: Dict[int, torch.Tensor] | torch.Tensor, number_of_noise: int, retain_data: Dataset):
         """
+        Initializes the FeatureMU_Loader, containing a generator for noise and a dataset which contains the data that should be retained.
 
+        Args:
+            noise_generator (NoiseGenerator): The noise generator which generates the noise.
+            label4noise (torch.Tensor): The label which is used to generate the noise.
+            number_of_noise (int): The number of noise samples to be generated.
+            retain_data (Dataset): The dataset which contains the data that should be retained.
         """
         self.noise_gen = noise_generator
         self.retain_data = retain_data
         self.number_of_noise = number_of_noise
         self.label4noise = label4noise
 
+        # Set the noise generator to evaluation mode
         self.noise_gen.eval()
 
     def __len__(self) -> int:
         """
+        Returns the total number of samples in the dataset.
 
+        This includes the number of noise samples and the number of samples
+        in the retained data.
+
+        Returns:
+            int: The total number of samples in the dataset.
         """
+        # Calculate the total number of samples by summing the number of noise
+        # samples and the number of samples in the retained dataset.
         return len(self.retain_data) + self.number_of_noise
 
     def __getitem__(self, idx: int) -> Tuple[torch.Tensor, torch.Tensor]:
         """
+        Returns a sample from the dataset.
 
+        If the index is less than the number of noise samples, it returns a noise sample and the label.
+        Otherwise, it returns a sample from the retained data.
+
+        Args:
+            idx (int): The index of the sample.
+
+        Returns:
+            Tuple[torch.Tensor, torch.Tensor]: A tuple containing the sample and the label.
         """
         if idx < self.number_of_noise:
+            # Get the label from the label4noise dictionary if it's a dictionary
             label = self.label4noise if isinstance(self.label4noise, torch.Tensor) else self.label4noise[idx]
+            # Return the noise sample and the label
             return self.noise_gen()[idx].to(DEVICE), label.to(DEVICE)
         else:
+            # Return a sample from the retained data
             s, l = self.retain_data.__getitem__(idx - self.number_of_noise)
             return s.to(DEVICE), l.to(DEVICE)
 

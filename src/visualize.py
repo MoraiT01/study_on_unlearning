@@ -5,11 +5,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from typing import Dict, List, Literal
 from matplotlib.colors import LinearSegmentedColormap
-from tqdm import tqdm
 import numpy as np
 
 from helper import get_dataset_subsetloaders
-from metrics import calc_singlemodel_metric, calc_multimodel_metric
+from metrics import calc_singlemodel_metric
 
 def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     """

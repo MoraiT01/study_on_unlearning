@@ -31,18 +31,6 @@ def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_
         shuffle=False,
     )
 
-    # not necessary, since it's the same as 7/5_erased
-    # D_ERASED = DataLoader(
-    #     dataset=MNIST_CostumDataset(
-    #         sample_mode="only_erased",
-    #         train=train_split,
-    #         test=test_split,
-    #         dataset_name=dataset_name,
-    #     ),
-    #     batch_size=8,
-    #     shuffle=False,
-    # )
-
     D_REMAIN = DataLoader(
         dataset=MNIST_CostumDataset(
             sample_mode="except_erased",

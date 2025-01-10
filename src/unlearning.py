@@ -2,10 +2,9 @@
     This file contains unlearning algorithms
 """
 import torch
-import numpy as np
 from torch.nn.modules import Module
 from torch.utils.data import DataLoader
-from typing import Literal, Tuple, Dict
+from typing import Literal, Dict
 from copy import deepcopy
 from tqdm import tqdm
 
@@ -36,7 +35,14 @@ class SimpleGradientAscent(Unlearner):
 
     This algorithm is the most intuitive unlearning algorithm. It simply performs gradient ascent on the samples which should be unlearned.
     """
-    def __init__(self, model: torch.nn.Module, unlearned_data: DataLoader, dataset_name: Literal["mnist", "cmnist", "fashion_mnist"]) -> None:
+    def __init__(
+            self,
+            model: torch.nn.Module,
+            unlearned_data: DataLoader,
+            dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
+            t_LR: float = None,
+            t_Epochs: int = 1,
+            ) -> None:
         """
         Initializes the SimpleGradientAscent unlearning algorithm.
 
@@ -49,6 +55,9 @@ class SimpleGradientAscent(Unlearner):
         self.unlearned_data = unlearned_data
 
         self._initialize(dataset_name=dataset_name)
+        if t_LR is not None:
+            self.lr = t_LR
+        self.epochs = t_Epochs
 
     def _initialize(self, dataset_name) -> None:
         """Initializes the unlearning algorithm hyperparameters"""
@@ -74,17 +83,18 @@ class SimpleGradientAscent(Unlearner):
         loss_function = torch.nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(new_model.parameters(), lr=self.lr, maximize=True)
 
-        for images, labels in tqdm(self.unlearned_data, desc="Unlearning samples", leave=False):
-            images, labels = images.to(DEVICE), labels.to(DEVICE)
+        for epoch in range(self.epochs):
+            for images, labels in tqdm(self.unlearned_data, desc="Unlearning samples", leave=False):
+                images, labels = images.to(DEVICE), labels.to(DEVICE)
 
-            # Zero the gradients
-            new_model.zero_grad()
+                # Zero the gradients
+                new_model.zero_grad()
 
-            # Forward pass
-            outputs = new_model(images)
-            loss = loss_function(outputs, labels)
-            loss.backward()
-            optimizer.step()
+                # Forward pass
+                outputs = new_model(images)
+                loss = loss_function(outputs, labels)
+                loss.backward()
+                optimizer.step()
 
         return new_model
 
@@ -103,7 +113,7 @@ class GeneratorMachineUnlearning(Unlearner):
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
             ) -> None:
         """
-        Initializes the GeneratorFeatureUnlearning algorithm.
+        Initializes the GeneratorMachineUnlearning algorithm.
 
         Parameters:
             model (torch.nn.Module): The model to be unlearned.
@@ -113,11 +123,11 @@ class GeneratorMachineUnlearning(Unlearner):
         self.dataset_name = dataset_name
 
     def __str__(self) -> str:
-        return "GeneratorFeatureUnlearning"
+        return "GeneratorMachineUnlearning"
     
     def unlearn(self, logs: bool = False) -> Module:
         """
-        Unlearns the model according to the GeneratorFeatureUnlearning algorithm.
+        Unlearns the model according to the GeneratorMachineUnlearning algorithm.
 
         Returns:
             Module: The model after unlearning.
@@ -184,7 +194,7 @@ def get_unlearners(name: Literal["SimpleGradientAscent", "GeneratorFeatureUnlear
     Returns a dictionary of Unlearners for all models in args["models"].
 
     Parameters:
-        name (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning"]): The name of the unlearning algorithm to use.
+        name (Literal["SimpleGradientAscent", "GeneratorFeatureUnlearning", "GeneratorMachineUnlearning"]): The name of the unlearning algorithm to use.
         dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to use.
         args (dict, optional): Additional arguments to pass to the Unlearner. Defaults to None.
 

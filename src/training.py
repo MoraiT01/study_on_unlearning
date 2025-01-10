@@ -173,8 +173,6 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
         }
     }
 
-    # Instead of epochs it should be the number of Updates
-
     # Every 1000 Updates, we'll do an evaluation
     counter = n_updates
     last_update = False
@@ -230,12 +228,6 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     sns.set(style='whitegrid')
 
     plt.figure(figsize=(10, 5))
-
-    # sns.lineplot(
-    #     x=losses["Training"]["x"], 
-    #     y=losses["Training"]["y"], 
-    #     label='Training Loss per Batch', 
-    #     color='yellow').lines[0].set_linestyle("--")
 
     sns.lineplot(
         x=losses["Average Training"]["x"], 
@@ -448,8 +440,6 @@ def train_n_models(
     """
 
     models_dict = {}
-    # checking if the destination folder exists
-    # and if so, removing all files in it
     if os.path.exists(f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble") and test_ensemble:
         shutil.rmtree(f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble")
 
