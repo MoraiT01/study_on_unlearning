@@ -440,6 +440,7 @@ def _main(
     Returns:
         torch.nn.Module: The model after the unlearning process.
     """
+    torch.cuda.empty_cache()
     model.to(DEVICE)
     start_time = datetime.datetime.now().timestamp()
 

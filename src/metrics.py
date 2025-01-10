@@ -6,6 +6,7 @@ from tqdm import tqdm
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 from typing import Literal, Dict
+import math
 
 from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
@@ -148,8 +149,10 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
             
             # Calculate the KL divergence for each sample and sum up
             kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item()
+            if math.isnan(kl_divergence):
+                raise ValueError("KL Divergence is NaN")
 
-            kl_divergence = round(kl_divergence, 4) # I had problems with very small numbers accumulating to scuw the result
+            # kl_divergence = round(kl_divergence, 6) # I had problems with very small numbers accumulating to scuw the result
             
             # Update cumulative average
             kl_divergence_ca = kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
