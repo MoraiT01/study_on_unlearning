@@ -47,6 +47,42 @@ def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n
 
     return avg_accuracy
 
+def calc_classification_histogram(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n: int=1, total: int=1) -> torch.Tensor:
+    """
+    Calculates the classification histogram of the model on the evaluation data
+
+    Args:
+        model (Module): The model to be evaluated
+        testing_loader (DataLoader): A DataLoader containing the evaluation data
+        n (int): The number of the model to be evaluated
+        total (int): The total number of models to be evaluated
+
+    Returns:
+        Tensor: The classification histogram of the model on the evaluation data
+    """
+    # evaluation phase
+    model.eval()  # Set model to evaluation mode
+    predictions = torch.tensor([0,0,0,0,0,0,0,0,0,0]).unsqueeze(0)
+
+    # Iterate over the evaluation dataset
+    with torch.no_grad():  # No need to compute gradients during evaluation
+        for images, labels in tqdm(testing_loader, desc=f"Evaluation model {n}/{total}", leave=False):
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
+
+            # Forward pass
+            outputs = model(images)
+
+            # Calculate accuracy
+            _, preds = torch.max(outputs, 1)
+
+            # Append prediction to histogram
+            predictions = torch.cat((predictions, preds.unsqueeze(0)), dim=1)
+
+    # calculate the histogram of the predictions
+    predictions = torch.nn.functional.one_hot(predictions).sum(dim = 1)
+
+    return predictions.squeeze(0)
+
 def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int, total:int, loss_function = nn.CrossEntropyLoss()) -> float:
     """
     Calculates the accuracy of the model on parsed data
