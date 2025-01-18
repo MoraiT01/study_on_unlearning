@@ -66,14 +66,14 @@ def load_models_dict(path: str) -> Dict[str, torch.nn.Module]:
         modeltype = TwoLayerPerceptron
     else:
         raise Exception(f"Model '{path}' not supported.")
-
+    device = "cuda:0" if torch.cuda.is_available() else "cpu"
     # load all the models
     md = {}
     for list in os.listdir(path):
         if list not in ["graphs"]:
             model = modeltype()
 
-            model.load_state_dict(torch.load(f=os.path.join(path, list), weights_only=True))
+            model.load_state_dict(torch.load(f=os.path.join(path, list), map_location=device, weights_only=True))
             model.eval()
             md[len(md)] = model
 

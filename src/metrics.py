@@ -225,9 +225,11 @@ def calc_mutlimodel_metric_average(modeltype1: Dict[str, torch.nn.Module], model
 
     result = 0.0
     counter = 0
-    for type1 in modeltype1.values():
-        for type2 in modeltype2.values():
-            result += calc_multimodel_metric(type1, type2, testing_loader, metric)
-            counter += 1
+    # Assuming modeltype1 and modeltype2 have the same keys and same length
+    if len(modeltype1.keys()) != len(modeltype2.keys()):
+        raise ValueError("modeltype1 and modeltype2 must have the same keys and same length")
+    for idx in modeltype1.keys():
+        result += calc_multimodel_metric(modeltype1[idx], modeltype2[idx], testing_loader, metric)
+        counter += 1
 
     return result / counter
