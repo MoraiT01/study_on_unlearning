@@ -128,21 +128,33 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
     Returns:
         dict: A dictionary where keys are parameter names and values are the L2 norms of the differences.
     """
+    
+    l2_norms = model_layer_wise_difference(model1, model2, p=2)
+    return sum(l2_norms.values())
+
+def model_layer_wise_difference(model1: nn.Module, model2: nn.Module, p=1) -> float:
+    """
+    Calculate the L2 norm of differences between parameters of two models with the same architecture.
+
+    Args:
+        model1 (nn.Module): The first model.
+        model2 (nn.Module): The second model.
+
+    Returns:
+        dict: A dictionary where keys are parameter names and values are the L2 norms of the differences.
+    """
     l2_norms = {}
     
     # Iterate over model parameters and calculate L2 norm of their differences
-
-    # TODO
-    # Anstatt der L2 Norm, könnt man hier die Layer-wise Distance Nehmen, bzw noch ein funktion dafür schreiben
     for (name1, param1), (name2, param2) in zip(model1.named_parameters(), model2.named_parameters()):
         if name1 != name2:
             raise ValueError(f"Models do not have matching parameter names: {name1} != {name2}")
         
         # Calculate the L2 norm of the difference between the parameters
-        l2_norm = torch.norm(param1 - param2, p=2).item()
+        l2_norm = torch.norm(param1 - param2, p=p).item()
         l2_norms[name1] = l2_norm
     
-    return sum(l2_norms.values())
+    return l2_norms
 
 def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Module, data_loader: DataLoader, device='cpu') -> float:
     """
