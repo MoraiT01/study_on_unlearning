@@ -131,6 +131,9 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
     l2_norms = {}
     
     # Iterate over model parameters and calculate L2 norm of their differences
+
+    # TODO
+    # Anstatt der L2 Norm, könnt man hier die Layer-wise Distance Nehmen, bzw noch ein funktion dafür schreiben
     for (name1, param1), (name2, param2) in zip(model1.named_parameters(), model2.named_parameters()):
         if name1 != name2:
             raise ValueError(f"Models do not have matching parameter names: {name1} != {name2}")
