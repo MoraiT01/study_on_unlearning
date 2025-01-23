@@ -5,7 +5,8 @@ from torch import nn
 from tqdm import tqdm
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
-from typing import Literal
+from typing import Literal, Dict
+import math
 
 from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
@@ -46,6 +47,42 @@ def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n
 
     return avg_accuracy
 
+def calc_classification_histogram(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n: int=1, total: int=1) -> torch.Tensor:
+    """
+    Calculates the classification histogram of the model on the evaluation data
+
+    Args:
+        model (Module): The model to be evaluated
+        testing_loader (DataLoader): A DataLoader containing the evaluation data
+        n (int): The number of the model to be evaluated
+        total (int): The total number of models to be evaluated
+
+    Returns:
+        Tensor: The classification histogram of the model on the evaluation data
+    """
+    # evaluation phase
+    model.eval()  # Set model to evaluation mode
+    predictions = torch.tensor([0,0,0,0,0,0,0,0,0,0]).unsqueeze(0)
+
+    # Iterate over the evaluation dataset
+    with torch.no_grad():  # No need to compute gradients during evaluation
+        for images, labels in tqdm(testing_loader, desc=f"Evaluation model {n}/{total}", leave=False):
+            images, labels = images.to(DEVICE), labels.to(DEVICE)
+
+            # Forward pass
+            outputs = model(images)
+
+            # Calculate accuracy
+            _, preds = torch.max(outputs, 1)
+
+            # Append prediction to histogram
+            predictions = torch.cat((predictions, preds.unsqueeze(0)), dim=1)
+
+    # calculate the histogram of the predictions
+    predictions = torch.nn.functional.one_hot(predictions).sum(dim = 1)
+
+    return predictions.squeeze(0)
+
 def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int, total:int, loss_function = nn.CrossEntropyLoss()) -> float:
     """
     Calculates the accuracy of the model on parsed data
@@ -80,7 +117,22 @@ def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int
 
     return avg_loss
 
-def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> dict:
+def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
+    """
+    Calculate the L2 norm of differences between parameters of two models with the same architecture.
+
+    Args:
+        model1 (nn.Module): The first model.
+        model2 (nn.Module): The second model.
+
+    Returns:
+        dict: A dictionary where keys are parameter names and values are the L2 norms of the differences.
+    """
+    
+    l2_norms = model_layer_wise_difference(model1, model2, p=2)
+    return sum(l2_norms.values())
+
+def model_layer_wise_difference(model1: nn.Module, model2: nn.Module, p=1) -> float:
     """
     Calculate the L2 norm of differences between parameters of two models with the same architecture.
 
@@ -99,12 +151,12 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> dict:
             raise ValueError(f"Models do not have matching parameter names: {name1} != {name2}")
         
         # Calculate the L2 norm of the difference between the parameters
-        l2_norm = torch.norm(param1 - param2, p=2).item()
+        l2_norm = torch.norm(param1 - param2, p=p).item()
         l2_norms[name1] = l2_norm
     
     return l2_norms
 
-def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device='cpu') -> float:
+def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Module, data_loader: DataLoader, device='cpu') -> float:
     """
     Compute the average KL divergence between prediction distributions of two models.
     
@@ -122,27 +174,47 @@ def kl_divergence_between_models(model1, model2, data_loader: DataLoader, device
     model1.eval()
     model2.eval()
     
-    kl_divergence_sum = 0.0
-    num_samples = 0
+    # Cumulative Average KL Divergence
+    kl_divergence_ca = 0
+    n = 0
+    very_small_number = 1e-6
     
     with torch.no_grad():
-        for inputs, _ in data_loader:
+        for inputs, labels in tqdm(data_loader, desc=f"KL Divergence", unit="batch", leave=False):
+            n += 1
             inputs = inputs.to(device)
+            labels = labels.to(device)
             
+
             # Get prediction logits from both models
             probs1 = model1(inputs)
             probs2 = model2(inputs)
+
+            # Add a small number to avoid log(0) errors
+            probs1 = probs1 + very_small_number
+            probs2 = probs2 + very_small_number
+
+            # Ensure probs are probabilities (apply softmax if needed)
+            probs1 = F.softmax(probs1, dim=1)
+            probs2 = F.softmax(probs2, dim=1)
             
             # Calculate the KL divergence for each sample and sum up
-            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean')
-            kl_divergence_sum += kl_divergence.item() * inputs.size(0)
-            num_samples += inputs.size(0)
+            kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item()
+            if math.isnan(kl_divergence):
+                raise ValueError("KL Divergence is NaN")
+            
+            # Update cumulative average
+            kl_divergence_ca = kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
     
     # Return average KL divergence over all samples
-    return kl_divergence_sum / num_samples
+    return kl_divergence_ca
 
-def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
-    """Serves as a forker for calc_accuracy and calc_loss"""
+def calc_singlemodel_metric(model: torch.nn.Module, testing_loader: torch.nn.Module, metric: Literal["loss", "accuracy"] = "accuracy", n: int = 1, total: int = 1) -> float:
+    """
+        Serves as a forker for:
+            - calc_accuracy
+            - calc_loss
+    """
     if metric == "loss":
         return calc_loss(model, testing_loader, n, total)
     elif metric == "accuracy":
@@ -150,6 +222,29 @@ def calc_singlemodel_metric(model: TwoLayerPerceptron, testing_loader: MNIST_Cos
     else:
         raise ValueError(f"Unknown metric: {metric}")
     
-def calc_multimodel_metric(model1: TwoLayerPerceptron, model2: TwoLayerPerceptron, testing_loader: MNIST_CostumDataset, metric: Literal[None] = "") -> float:
-    """Serves as a forker for TODO"""
-    raise NotImplementedError
+def calc_multimodel_metric(model1: torch.nn.Module, model2: torch.nn.Module, testing_loader: MNIST_CostumDataset = None, metric: Literal["kl_div", "l2_norm"] = "l2_norm") -> float:
+    """
+        Serves as a forker for:
+            - kl_divergence_between_models
+            - model_l2_norm_difference
+    """
+    if metric == "kl_div":
+        return kl_divergence_between_models(model1, model2, testing_loader)
+    elif metric == "l2_norm":
+        return model_l2_norm_difference(model1, model2)
+    else:
+        raise ValueError(f"Unknown metric: {metric}")
+    
+def calc_mutlimodel_metric_average(modeltype1: Dict[str, torch.nn.Module], modeltype2: Dict[str, torch.nn.Module], testing_loader: MNIST_CostumDataset = None, metric: Literal["kl_div", "l2_norm"] = "l2_norm") -> float:
+    """loops over 'calc_mutlimodel_metric' and averages the results"""
+
+    result = 0.0
+    counter = 0
+    # Assuming modeltype1 and modeltype2 have the same keys and same length
+    if len(modeltype1.keys()) != len(modeltype2.keys()):
+        raise ValueError("modeltype1 and modeltype2 must have the same keys and same length")
+    for idx in modeltype1.keys():
+        result += calc_multimodel_metric(modeltype1[idx], modeltype2[idx], testing_loader, metric)
+        counter += 1
+
+    return result / counter

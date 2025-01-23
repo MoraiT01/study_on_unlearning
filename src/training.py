@@ -2,6 +2,7 @@
 
 from typing import List, Dict, Tuple, Literal
 import os
+import shutil
 from datetime import datetime
 
 import matplotlib.pyplot as plt
@@ -20,9 +21,9 @@ eval_steps = 1000
 
 # Set the parameters for the different datasets
 model_params = {
-    "mnist":            {"lr": 0.001, "n_updates":  2000, "eval_steps":  200, "model": TwoLayerPerceptron},
-    "cmnist":           {"lr": 0.0005, "n_updates":  5000, "eval_steps":  500, "model": ConvNet},
-    "fashion_mnist":    {"lr": 0.0005, "n_updates": 4000, "eval_steps": 400 , "model": TwoLayerPerceptron},
+    "mnist":            {"lr": 0.00001, "n_updates": 60000,    "eval_steps": 6000,  "model": TwoLayerPerceptron},
+    "cmnist":           {"lr": 0.0001,  "n_updates": 20000,    "eval_steps": 2000,  "model": ConvNet},
+    "fashion_mnist":    {"lr": 0.00002, "n_updates": 60000,    "eval_steps": 6000,  "model": TwoLayerPerceptron},
 }
 
 # Set device (use GPU if available)
@@ -172,8 +173,6 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
         }
     }
 
-    # Instead of epochs it should be the number of Updates
-
     # Every 1000 Updates, we'll do an evaluation
     counter = n_updates
     last_update = False
@@ -229,12 +228,6 @@ def plot_losses(losses: Dict[str, Dict[str, List]], name: str, path: str = f"dat
     sns.set(style='whitegrid')
 
     plt.figure(figsize=(10, 5))
-
-    # sns.lineplot(
-    #     x=losses["Training"]["x"], 
-    #     y=losses["Training"]["y"], 
-    #     label='Training Loss per Batch', 
-    #     color='yellow').lines[0].set_linestyle("--")
 
     sns.lineplot(
         x=losses["Average Training"]["x"], 
@@ -321,6 +314,7 @@ def main(
         dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist",
         include_val: bool = True,
         logs: bool = True,
+        test_ensemble: bool = False,
     ) -> Tuple[Module, str]:
     """
         Trains a model using the specified dataset and sampling mode.
@@ -333,6 +327,7 @@ def main(
             dataset_name (Literal["mnist", "cmnist", "fashion_mnist"]): The name of the dataset to be used.
             include_val (bool): Whether to include validation data in the training process.
             logs (bool): Whether to print logs.
+            test_ensemble (bool): Whether its the test the ensemble. Changes only the path for saving the model.
     """
     # Load the specified dataset
     if dataset_name not in ["mnist", "cmnist", "fashion_mnist"]:
@@ -406,15 +401,17 @@ def main(
         name = new_name
     if balanced:
         name = f"b_{name}"
-
-    # Plot the training and validation losses
-    plot_losses(losses, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses", logs=logs)
-
-    # Plot the training and validation accuracies
-    plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys", logs=logs)
-
-    # Save the model
-    save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{sampling_mode}", logs=logs)
+    if test_ensemble:
+        plot_losses(losses,         name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble{os.sep}graphs{os.sep}losses", logs=logs)
+        plot_accuracys(accuracys,   name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble{os.sep}graphs{os.sep}accuracys", logs=logs)
+        save_model(model=model,     name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble", logs=logs)
+    else:
+        # Plot the training and validation losses
+        plot_losses(losses, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}graphs{os.sep}losses", logs=logs)
+        # Plot the training and validation accuracies
+        plot_accuracys(accuracys, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}graphs{os.sep}accuracys", logs=logs)
+        # Save the model
+        save_model(model=model, name=name, path=f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}", logs=logs)
 
     return model, name
 
@@ -425,6 +422,7 @@ def train_n_models(
         balanced: bool = True,
         include_val: bool = False,
         logs: bool = False,
+        test_ensemble: bool = False,
     ) -> Dict[str, Module]:
     """
     Trains n models with the same parameters and returns a dictionary of the trained models.
@@ -442,6 +440,8 @@ def train_n_models(
     """
 
     models_dict = {}
+    if os.path.exists(f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble") and test_ensemble:
+        shutil.rmtree(f"..{os.sep}data{os.sep}models{os.sep}{dataset_name}{os.sep}{sampling_mode}{os.sep}test_ensemble")
 
     for i in tqdm(range(n), desc="Training models", unit="models", leave=True):
         model, name = main(
@@ -452,6 +452,7 @@ def train_n_models(
             dataset_name=dataset_name,
             include_val=include_val,
             logs=logs,
+            test_ensemble=test_ensemble,
         )
         models_dict[name] = model
 
