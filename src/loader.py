@@ -10,7 +10,15 @@ PATH_TO_CMNIST_TRAIN = f"..{os.sep}data{os.sep}cmnist_repo{os.sep}training"
 import git
 
 def download_cmnist_from_github(clone_path: str =f"..{os.sep}data{os.sep}c_mnist"):
+    """
+    Downloads the colorized-MNIST dataset from GitHub and saves it to the given clone_path.
 
+    Parameters:
+        clone_path (str): The path where the repository should be cloned to. Defaults to f"..{os.sep}data{os.sep}c_mnist".
+
+    Returns:
+        None
+    """
     # URL of the GitHub repository
     repo_url = 'https://github.com/jayaneetha/colorized-MNIST.git'
 
@@ -25,7 +33,12 @@ def download_cmnist_from_github(clone_path: str =f"..{os.sep}data{os.sep}c_mnist
         print(f"An error occurred: {e}")
 
 def prepare_cmnist_data() -> Dict[str, Dict[str, Image | str]]:
+    """
+    Downloads the colorized MNIST dataset from GitHub and prepares it for loading.
 
+    Returns a dictionary containing two keys, "test" and "train", each containing a list of dictionaries
+    containing the image path and label for each image in the respective set.
+    """
     # first the download
     download_cmnist_from_github(f"..{os.sep}data{os.sep}cmnist_repo")
 

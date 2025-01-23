@@ -19,7 +19,13 @@ from loader import prepare_cmnist_data
 # Außerdem weicht das genau Training auch ab von dem was im Paper vorgeht, aber das soll nicht von wichtigkeit sein, da das MU im Vordergrund steht
 
 class TwoLayerPerceptron(torch.nn.Module):
+    """
+    A two layer perceptron model used for MNIST
+    """
     def __init__(self):
+        """
+        Initializes the model
+        """
         super(TwoLayerPerceptron, self).__init__()
         self.fc1 = torch.nn.Linear(784, 800)
         self.fc3 = torch.nn.Linear(800, 10)
@@ -27,6 +33,9 @@ class TwoLayerPerceptron(torch.nn.Module):
         self.path = None
 
     def forward(self, x):
+        """
+        Defines the forward pass of the model
+        """
         x = self.fc1(x)
         x = torch.relu(x)
         x = self.fc3(x)
@@ -34,9 +43,15 @@ class TwoLayerPerceptron(torch.nn.Module):
         return x
     
     def set_path(self, new_path: str):
+        """
+        Sets the path to the model
+        """
         self.path = new_path
 
     def get_path(self):
+        """
+        Gets the path to the model
+        """
         return self.path
     
     __str__ = lambda self: "TwoLayerPerceptron"
@@ -79,7 +94,7 @@ class ConvNet(torch.nn.Module):
 
     def get_path(self):
         return self.path
-    
+
     __str__ = lambda self: "ConNet"
 
 class ConvNet4Fashion(torch.nn.Module):
@@ -128,7 +143,7 @@ class MNIST_CostumDataset(Dataset):
             download: bool=False,
             ):
         """
-            Constructor for the MNIST_CostumDataset class.
+            Constructor for the MNIST_CustomDataset class.
 
             Parameters:
                 root_dir (str): The root directory of the dataset.
@@ -146,8 +161,6 @@ class MNIST_CostumDataset(Dataset):
         self.test = test
         self.classes = classes
         self.dataset_name = dataset_name
-        # In order to sample in the same way every time
-        # and for balancing purposes
         self.cls_counter = {k: 0 for k in self.classes}
         self.balanced = balanced
         self.next_cls = 0
@@ -163,7 +176,6 @@ class MNIST_CostumDataset(Dataset):
         """Loads the respective dataset"""
 
         s = {}
-        
         # iterate over all folders in the root directory
         for folder in os.listdir(self.root_dir):
             if folder.endswith("e"):
@@ -180,8 +192,7 @@ class MNIST_CostumDataset(Dataset):
             for file in os.listdir(os.path.join(self.root_dir, folder)):
                 if self.to_be_included(file, folder) and current_label in self.classes:
                     s[current_label][len(s[current_label])] = os.path.join(self.root_dir, folder, file)
-                    # A Dictionary is created for each class with the index of the sample as key
-                    # Samples[class][sample_index] = path_to_the_sample
+
         self.max_samples_length = min([len(v) for v in s.values()])
         return s
     
@@ -191,7 +202,6 @@ class MNIST_CostumDataset(Dataset):
             otherwise, we might fall into the trap off not including them in the training loop at all.
             Unlearning makes only sense if the model saw the samples in the first place.
         """
-        # affected_cls = "5" if self.dataset_name == "cmnist" else "7"
         for affected_cls in self.classes:
             keys =  list(self.samples[affected_cls].keys())
             shared_random_state.shuffle(keys)
@@ -244,11 +254,11 @@ class MNIST_CostumDataset(Dataset):
         index = self.cls_counter[key]
         # update the counter
         self.cls_counter[key] += 1
-        
+
         # reset the counter if it's over the allowed length
         if self.cls_counter[key] >= self.max_samples_length:
             self.cls_counter[key] = 0
-
+        
         # update the next class
         if self.next_cls < len(self.classes) - 1:
             self.next_cls += 1
@@ -272,10 +282,6 @@ class MNIST_CostumDataset(Dataset):
                 tuple: A tuple containing the sample as a 784-dimensional tensor 
                     and the target as a one-hot encoded tensor with 10 dimensions.
         """
-        # The idx does not influence the sample, which is returned
-        # What is relevant for the sampling is
-        # - self.cls_counter
-        # - self.next_cls
             
         # first let's get the next class
         cls = self.classes[self.next_cls]
@@ -307,9 +313,6 @@ class MNIST_CostumDataset(Dataset):
             sample = Image.open(x).convert("L")
             sample = np.array([sample])
             sample = torch.Tensor(sample)
-            # if self.dataset_name == "fashion_mnist":
-            #     sample = sample * 1/255
-            # else:
             sample = sample.view(sample.size(0), -1).squeeze() * 1/255
         target = torch.zeros(10)
         target[int(cls)] = 1
@@ -345,15 +348,14 @@ class MNIST_CostumDataset(Dataset):
         # Check if it allready exists
         # If so, we assume that the data is already saved
         if os.path.exists(output_dir):
-            # print("Data already saved to: ", output_dir)
             return
-        else:
-            os.makedirs(output_dir)
+        os.makedirs(output_dir)
 
+        listings, new_folder_name = get_listings(self.dataset_name)
         # Iterate through the dataset (train and test set)
         for split in ['train', 'test']:
             data_split = dataset[split]
-
+            
             # Loop over each sample in the dataset
             for idx, sample in enumerate(data_split):
                 image, label = sample['image'], sample['label']
@@ -369,10 +371,8 @@ class MNIST_CostumDataset(Dataset):
                         name = name.replace("_", "_r_")
                     image = Image.open(image)
 
-                # Create the directory for the class if it doesn't exist
-                # first we need to check, if it is listed on the to unlearn sample
-                listings, new_folder_name = get_listings(self.dataset_name)
-                if name in listings:
+                # Create a folder for the current class 
+                if name not in listings and str(label) in new_folder_name: 
                     class_dir = os.path.join(output_dir, new_folder_name)
                 else:
                     class_dir = os.path.join(output_dir, str(label))
