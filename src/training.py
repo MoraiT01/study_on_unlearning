@@ -8,7 +8,7 @@ from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
 import torch
-from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet, ConvNet4Fashion
+from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet
 import torch.nn as nn
 import torch.optim as optim
 from torch.nn import Module

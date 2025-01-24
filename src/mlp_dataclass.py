@@ -97,37 +97,6 @@ class ConvNet(torch.nn.Module):
 
     __str__ = lambda self: "ConNet"
 
-class ConvNet4Fashion(torch.nn.Module):
-    def __init__(self):
-        super(ConvNet4Fashion, self).__init__()
-        # First convolutional layer with kernel size 3x3 and 32 filters
-        self.conv1 = torch.nn.Conv2d(in_channels=1, out_channels=32, kernel_size=3, padding=1)
-        self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
-        # Second convolutional layer with kernel size 3x3 and 64 filters
-        self.conv2 = torch.nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, padding=1)
-        # Fully connected layer
-        self.fc1 = torch.nn.Linear(64 * 7 * 7, 128)  # 7*7 is the size after 2 pooling layers on 28x28 input
-        # Output layer
-        self.fc2 = torch.nn.Linear(128, 10)
-
-        self.path = None
-
-    def forward(self, x):
-        x = self.pool(torch.relu(self.conv1(x)))    # First conv + ReLU + pooling
-        x = self.pool(torch.relu(self.conv2(x)))    # Second conv + ReLU + pooling
-        x = x.view(-1, 64 * 7 * 7)                  # Flatten
-        x = torch.relu(self.fc1(x))                 # Fully connected layer with ReLU
-        x = torch.softmax(self.fc2(x), dim=1)       # Output layer with softmax
-        return x
-
-    def set_path(self, new_path: str):
-        self.path = new_path
-
-    def get_path(self):
-        return self.path
-    
-    __str__ = lambda self: "ConNet4Fashion"
-
 class MNIST_CostumDataset(Dataset):
     """Costum dataset class for my own experiments."""
 

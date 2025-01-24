@@ -40,7 +40,7 @@ class SimpleGradientAscent(Unlearner):
             model: torch.nn.Module,
             unlearned_data: DataLoader,
             dataset_name: Literal["mnist", "cmnist", "fashion_mnist"],
-            t_LR: float = 0.84,
+            t_LR: float = None,
             t_Epochs: int = 1,
             ) -> None:
         """

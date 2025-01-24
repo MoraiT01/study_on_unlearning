@@ -26,6 +26,7 @@ def calc_accuracy(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n
         float: The average accuracy of the model on the evaluation data
     """
     # evaluation phase
+    model = model.to(DEVICE)
     model.eval()  # Set model to evaluation mode
     correct = 0
 
@@ -61,6 +62,7 @@ def calc_classification_histogram(model: torch.nn.Module, testing_loader: MNIST_
         Tensor: The classification histogram of the model on the evaluation data
     """
     # evaluation phase
+    model = model.to(DEVICE)
     model.eval()  # Set model to evaluation mode
     predictions = torch.tensor([0,0,0,0,0,0,0,0,0,0]).unsqueeze(0)
 
@@ -96,6 +98,7 @@ def calc_loss(model: torch.nn.Module, testing_loader: MNIST_CostumDataset, n:int
         float: The average loss of the model on the evaluation data
     """
     # evaluation phase
+    model = model.to(DEVICE)
     model.eval()  # Set model to evaluation mode
     losses = []
 
@@ -129,7 +132,8 @@ def model_l2_norm_difference(model1: nn.Module, model2: nn.Module) -> float:
         dict: A dictionary where keys are parameter names and values are the L2 norms of the differences.
     """
     
-    l2_norms = model_layer_wise_difference(model1, model2, p=2)
+    m1, m2 = model1.to(DEVICE), model2.to(DEVICE)
+    l2_norms = model_layer_wise_difference(m1, m2, p=2)
     return sum(l2_norms.values())
 
 def model_layer_wise_difference(model1: nn.Module, model2: nn.Module, p=1) -> float:
@@ -144,9 +148,10 @@ def model_layer_wise_difference(model1: nn.Module, model2: nn.Module, p=1) -> fl
         dict: A dictionary where keys are parameter names and values are the L2 norms of the differences.
     """
     l2_norms = {}
+    m1, m2 = model1.to(DEVICE), model2.to(DEVICE)
     
     # Iterate over model parameters and calculate L2 norm of their differences
-    for (name1, param1), (name2, param2) in zip(model1.named_parameters(), model2.named_parameters()):
+    for (name1, param1), (name2, param2) in zip(m1.named_parameters(), m2.named_parameters()):
         if name1 != name2:
             raise ValueError(f"Models do not have matching parameter names: {name1} != {name2}")
         
@@ -178,34 +183,38 @@ def kl_divergence_between_models(model1: torch.nn.Module, model2: torch.nn.Modul
     kl_divergence_ca = 0
     n = 0
     very_small_number = 1e-6
-    
+
     with torch.no_grad():
-        for inputs, labels in tqdm(data_loader, desc=f"KL Divergence", unit="batch", leave=False):
+        for inputs, labels in tqdm(data_loader, desc="KL Divergence", unit="batch", leave=False):
             n += 1
             inputs = inputs.to(device)
-            labels = labels.to(device)
-            
 
             # Get prediction logits from both models
-            probs1 = model1(inputs)
-            probs2 = model2(inputs)
+            logits1 = model1(inputs)
+            logits2 = model2(inputs)
 
-            # Add a small number to avoid log(0) errors
-            probs1 = probs1 + very_small_number
-            probs2 = probs2 + very_small_number
+            # Clamp logits for numerical stability
+            logits1 = torch.clamp(logits1, min=-15, max=15)
+            logits2 = torch.clamp(logits2, min=-15, max=15)
 
-            # Ensure probs are probabilities (apply softmax if needed)
-            probs1 = F.softmax(probs1, dim=1)
-            probs2 = F.softmax(probs2, dim=1)
-            
-            # Calculate the KL divergence for each sample and sum up
+            # Ensure probabilities are valid
+            probs1 = F.softmax(logits1, dim=1)
+            probs2 = F.softmax(logits2, dim=1)
+
+            # Avoid log(0) issues
+            probs1 = torch.clamp(probs1, min=very_small_number)
+            probs2 = torch.clamp(probs2, min=very_small_number)
+
+            # Calculate KL divergence
             kl_divergence = F.kl_div(probs1.log(), probs2, reduction='batchmean').item()
-            if math.isnan(kl_divergence):
-                raise ValueError("KL Divergence is NaN")
-            
+
+            # Handle NaN or Inf values
+            if math.isnan(kl_divergence) or math.isinf(kl_divergence):
+                raise ValueError("KL Divergence is invalid (NaN or Infinity)")
+
             # Update cumulative average
-            kl_divergence_ca = kl_divergence_ca + (kl_divergence - kl_divergence_ca)/n
-    
+            kl_divergence_ca = kl_divergence_ca + (kl_divergence - kl_divergence_ca) / n
+
     # Return average KL divergence over all samples
     return kl_divergence_ca
 
