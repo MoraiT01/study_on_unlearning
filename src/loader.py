@@ -40,7 +40,8 @@ def prepare_cmnist_data() -> Dict[str, Dict[str, Image | str]]:
     containing the image path and label for each image in the respective set.
     """
     # first the download
-    download_cmnist_from_github(f"..{os.sep}data{os.sep}cmnist_repo")
+    if not os.path.exists(f"..{os.sep}data{os.sep}cmnist_repo"):
+        download_cmnist_from_github(f"..{os.sep}data{os.sep}cmnist_repo")
 
     # prepare to read all the files
     test = []
@@ -50,13 +51,11 @@ def prepare_cmnist_data() -> Dict[str, Dict[str, Image | str]]:
     for folder in os.listdir(PATH_TO_CMNIST_TEST):
 
         # iterate over all files in the current folder
-        
         for file in os.listdir(os.path.join(PATH_TO_CMNIST_TEST, folder)):
             
             test.append({"image": os.path.join(PATH_TO_CMNIST_TEST, folder, file), "label": folder})
     
     for folder in os.listdir(PATH_TO_CMNIST_TRAIN):
-
         # iterate over all files in the current folder
         for file in os.listdir(os.path.join(PATH_TO_CMNIST_TRAIN, folder)):
                 

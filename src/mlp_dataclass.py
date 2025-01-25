@@ -341,7 +341,8 @@ class MNIST_CostumDataset(Dataset):
                     image = Image.open(image)
 
                 # Create a folder for the current class 
-                if name not in listings and str(label) in new_folder_name: 
+                # if name in listings and str(label) in new_folder_name:
+                if False: 
                     class_dir = os.path.join(output_dir, new_folder_name)
                 else:
                     class_dir = os.path.join(output_dir, str(label))
