@@ -1,3 +1,8 @@
 data
 local
 __pycache__
+.lprof
+Fast-Machine-Unlearning/data
+Fast-Machine-Unlearning/local
+Fast-Machine-Unlearning/.lprof
+Fast-Machine-Unlearning/cifar10.tgz
