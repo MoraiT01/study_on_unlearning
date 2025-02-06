@@ -1,6 +1,7 @@
 """
     contains all the code necessary for running the MU algorithm inspired by https://github.com/vikram2000b/Fast-Machine-Unlearning
-    Instead of unlearning one entire class, we focus on unlearning a subset of on class, grouped together by one shared feature
+    Instead of unlearning one entire class, we focus on unlearning a subset of on class, grouped together by one shared feature,
+    but this version does not use the prior model predictions as labels
         -> hence: Feature Unlearning
 """
 

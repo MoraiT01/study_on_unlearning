@@ -1,4 +1,4 @@
-"""Contains the model used for experiments"""
+"""Contains the model and costum dataset class used for experiments"""
 
 import torch
 import os
