@@ -208,11 +208,13 @@ def train_and_evaluate(model: Module, train_loader: DataLoader, val_loader: Data
 
         if logs:
             # Print epoch results
-            print(f"Number of Updates [{current_update_count}/{n_updates}] - "
-                f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - "
-                f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - "
-                f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - "
-                f"Val Accuracy: {accuracys['Validation']['y'][-1]:.4f}")
+            print(f"Number of Updates [{current_update_count}/{n_updates}] - ", end="")
+            print(f"Train Loss: {losses['Average Training']['y'][-1]:.4f} - ", end="")
+            if val_loader is not None:
+                print(f"Val Loss: {losses['Average Validation']['y'][-1]:.4f} - ", end="")
+            print(f"Train Accuracy: {accuracys['Training']['y'][-1]:.4f} - ", end="")
+            if val_loader is not None:
+                print(f"Val Accuracy: {accuracys['Validation']['y'][-1]:.4f}", end="")
         if last_update:
             break
 
