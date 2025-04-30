@@ -5,7 +5,7 @@ from torch.utils.data import DataLoader
 import torch
 import os
 
-from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet
+from src.mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron, ConvNet
 
 def get_dataset_subsetloaders(dataset_name: Literal["mnist", "cmnist", "fashion_mnist"] = "mnist", train_split: bool = True, test_split: bool = True) -> Tuple[DataLoader, DataLoader, Dict[str, DataLoader]]:
     """

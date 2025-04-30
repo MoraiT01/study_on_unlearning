@@ -8,9 +8,9 @@ from typing import Literal, Dict
 from copy import deepcopy
 from tqdm import tqdm
 
-from training import model_params
-import gefeu
-import gemu
+from src.training import model_params
+import src.gefeu as gefeu
+import src.gemu as gemu
 
 from abc import ABC, abstractmethod
 # Set device (use GPU if available)

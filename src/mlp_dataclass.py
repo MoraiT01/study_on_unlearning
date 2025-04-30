@@ -3,7 +3,7 @@
 import torch
 import os
 from typing import Literal, List
-from my_random import shared_random_state
+from src.my_random import shared_random_state
 
 from datasets import load_dataset
 from PIL import Image
@@ -11,8 +11,8 @@ from torch.utils.data import Dataset
 import numpy as np
 
 # the set containing the images which will be unlearned during the experiment
-from unlearned_samples import get_listings
-from loader import prepare_cmnist_data
+from src.unlearned_samples import get_listings
+from src.loader import prepare_cmnist_data
 
 # Im Paper wurde nicht gesagt, welche Activation function verwendet wird
 # Ich verwende ReLu, da es für mich der go-to ist
@@ -102,7 +102,7 @@ class MNIST_CostumDataset(Dataset):
 
     def __init__(
             self,
-            root_dir=f"..{os.sep}data",
+            root_dir=f"/fast_storage/kastler",
             sample_mode: Literal["all", "except_erased", "only_erased"] = "all",
             classes: List[str] = ["0", "1", "2", "3", "4", "5", "6", "7", "8", "9",],
             train: bool=False,

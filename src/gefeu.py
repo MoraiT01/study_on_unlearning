@@ -14,9 +14,9 @@ import torch.nn.functional as F
 from torch.utils.data import DataLoader, Dataset
 
 # my
-from training import model_params
-from mlp_dataclass import MNIST_CostumDataset
-from my_random import shared_random_state
+from src.training import model_params
+from src.mlp_dataclass import MNIST_CostumDataset
+from src.my_random import shared_random_state
 import math
 import datetime
 from tqdm import tqdm

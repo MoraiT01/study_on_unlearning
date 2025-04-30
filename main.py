@@ -53,7 +53,7 @@ def show_sample(sample:torch.Tensor):
     sample = Image.fromarray(sample)
     return sample
 
-from training import save_model
+from  src.training import save_model
 #### Exact
 if not ALLREADY_TRAINED:
     untrained_model = TwoLayerPerceptron() if USED_DATASET in ["mnist", "fashion_mnist"] else ConvNet()
@@ -157,17 +157,19 @@ if not ALLREADY_TRAINED:
 else:
     exact_ms = load_models_dict(path=f"data{os.sep}models{os.sep}{USED_DATASET}{os.sep}except_erased{os.sep}test_ensemble")
 
-from src.metrics import model_l2_norm_difference, calc_mutlimodel_metric_average
+from src.metrics import calc_mutlimodel_metric_average
 
 # ...trained model
 a11 = calc_mutlimodel_metric_average(untrained_ms, trained_ms, metric="l2_norm")
+print(a11)
 
 # ...exact model
 a12 = calc_mutlimodel_metric_average(untrained_ms, exact_ms, metric="l2_norm")
+print(a12)
 
 # ...untrained model
 a21 = calc_mutlimodel_metric_average(trained_ms, exact_ms, metric="l2_norm")
-a21
+print(a21)
 
 calc_mutlimodel_metric_average(modeltype1=trained_ms, modeltype2=trained_ms, metric="l2_norm")
 

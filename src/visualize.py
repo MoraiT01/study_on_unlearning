@@ -7,8 +7,8 @@ from typing import Dict, List, Literal
 from matplotlib.colors import LinearSegmentedColormap
 import numpy as np
 
-from helper import get_dataset_subsetloaders
-from metrics import calc_singlemodel_metric
+from src.helper import get_dataset_subsetloaders
+from src.metrics import calc_singlemodel_metric
 
 def visualize_weight_change(weights_before, weights_after, layer_name='Layer'):
     """

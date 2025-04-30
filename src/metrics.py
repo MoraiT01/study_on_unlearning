@@ -8,7 +8,7 @@ from torch.utils.data import DataLoader
 from typing import Literal, Dict
 import math
 
-from mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
+from src.mlp_dataclass import MNIST_CostumDataset, TwoLayerPerceptron
 
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
