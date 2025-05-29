@@ -37,3 +37,4 @@ Remember to choose a new and different study name if you change the use case and
 NOTES:
 
 - The Download for the CMNIST works, BUT the sorting into retain and forget is not working correctly
+- If interested, I provided my Bachelor Thesis corresponding to the experiments I conducted
